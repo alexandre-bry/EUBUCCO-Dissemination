@@ -1,0 +1,20 @@
+- Start with one country first: France
+- Convert to GeoParquet:
+  - Try different partitioning of files:
+    - One file
+    - One file per country
+    - One file per region
+  - Compare the query speed of different scenarios:
+    - Different partitioning scenarios for GeoParquet
+    - Different ordering
+    - Different formats
+    - Different software (`duckdb`, `ogr2ogr`/`gdal`)
+- Online map with buildings hosted somewhere, with features:
+  - Using PMTiles
+  - Showing attributes with colours
+  - Selecting a building to see attributes
+  - Searching for a city
+  - Compare visually the query speed of both GeoPackage and GeoParquet
+- If we have more time we could:
+  - Try more formats (FlatGeoBuf, or others?)
+  - Try more partitioning (using GADM format or H3)
