@@ -7,8 +7,8 @@ The goal of this project is to make accessing the [EUBUCCO dataset](https://eubu
 
 ### Code
 
-The code for dara conversion is in [`./data_conversions/](./data_conversions/).
-First, install`uv`.
+The code for dara conversion is in [`./data_conversions/`](./data_conversions/).
+First, install `uv`.
 Then, you can install the project with:
 
 ```bash
@@ -42,7 +42,7 @@ Several tools can be used for data conversion between the different formats that
 | [`duckdb`](https://duckdb.org/) + [spatial extension](https://duckdb.org/docs/stable/core_extensions/spatial/overview) | CLI + Python library | Everything from GDAL/OGR + Parquet | Everything from GDAL/OGR + Parquet |
 | [`ogr2ogr`](https://gdal.org/en/stable/programs/ogr2ogr.html#ogr2ogr) (gdal) | CLI + Python library | Everything from GDAL/OGR | Everything from GDAL/OGR + GeoParquet in a custom way |
 | [`geoparquet-io`](https://geoparquet.org/geoparquet-io/) | CLI + Python library | GeoPackage, GeoParquet, GeoJSON, ShapeFile, File Geodatabase | GeoParquet |
-| [`geopandas`] | Python library | Everything from GDAL/OGR + GeoParquet in a custom way | Everything from GDAL/OGR + GeoParquet in a custom way |
+| [`geopandas`](https://geopandas.org/en/stable/) | Python library | Everything from GDAL/OGR + GeoParquet in a custom way | Everything from GDAL/OGR + GeoParquet in a custom way |
 | [`tippecanoe`](https://github.com/felt/tippecanoe) | CLI | GeoJSON, FlatGeoBuf, CSV | PMTiles |
 
 To see all the vector formats supported by GDAL/OGR, see [this list of vector drivers](https://gdal.org/en/stable/drivers/vector/index.html).
