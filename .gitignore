@@ -4,3 +4,6 @@ data/
 **/__pycache__/
 **/.venv/
 **/.tmp/
+v0_1_CYP.gpkg
+v0_1_CYP_gpio.parquet
+v0_1_CYP_ogr2ogr.parquet
