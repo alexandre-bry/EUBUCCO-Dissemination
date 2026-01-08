@@ -105,7 +105,7 @@ class BuildingsStyleControl {
             let button = document.createElement("button");
             button.className = "style-control";
             button.textContent = style;
-            button.addEventListener("click", (e) => {
+            button.addEventListener("click", (_) => {
                 if (!this._map) {
                     return;
                 }
