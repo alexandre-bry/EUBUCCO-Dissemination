@@ -14,9 +14,7 @@
         "vite": "^7.2.4"
     },
     "dependencies": {
-        "@mapbox/mapbox-gl-language": "^1.0.1",
         "mapbox-gl": "^3.17.0",
-        "maplibre-basemaps": "^0.0.6",
         "maplibre-gl": "^5.15.0",
         "pmtiles": "^4.3.0"
     }

@@ -40,7 +40,7 @@ jobs:
         with:
           node-version: lts/*
           cache: 'npm'
-          working-directory: ./website
+          cache-dependency-path: ./website
       - name: Install dependencies
         run: npm ci
       - name: Build
