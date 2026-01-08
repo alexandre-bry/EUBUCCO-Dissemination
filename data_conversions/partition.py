@@ -26,20 +26,29 @@ def partition_gpkg_by_country_h3(gpkg_path : Path,
     # Save to parquet for gpio workflow
     gdf.to_parquet(PATH_PQ)
 
-    # Order, h3
+    # Hilbert-order, h3
+    """
     __ = gpio.read(PATH_PQ) \
         .add_bbox() \
         .sort_hilbert() \
         .add_h3(resolution = resolution, column_name= f"h3_res{resolution}") \
         .write(PATH_PQ)
+"""
+
+    # Hilbert-order, h3, partition
+    __ = gpio.read(PATH_PQ) \
+        .add_bbox() \
+        .partition_by_h3(output_dir = OUT_DIR, resolution = resolution)
+
 
     # Partition
+
 
 
 if __name__ == "__main__":
     DATA_DIR = Path("..", "data") # Home data mount
     IN_DIR = DATA_DIR / "gpkg" # Folder with all gpkg
-    OUT_DIR = IN_DIR / "parquet-h3" # One partition location
+    OUT_DIR = DATA_DIR / "partition" / "parquet-h3" # One partition location
     
     
     SAMPLE_FILE = IN_DIR / "v0_1-CYP.gpkg"
@@ -50,10 +59,10 @@ if __name__ == "__main__":
 
 
     # Read with gpd
-    f = gpd.read_parquet(PATH_PQ)
-    print(f)
+    #f = gpd.read_parquet(PATH_PQ)
+    #print(f)
 
-    print(f" Number of unique h3: {set(f["h3_res4"])}")
+    #print(f" Number of unique h3: {set(f["h3_res4"])}")
 
 
 
