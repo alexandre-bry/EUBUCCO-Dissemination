@@ -271,7 +271,9 @@ function createPropertiesHTML(properties: Record<string, any>): HTMLElement {
 }
 
 // const S3_PATH = "https://eubuccodissemination.fsn1.your-objectstorage.com";
-const S3_PATH = "/api";
+const S3_PATH = import.meta.env.PROD
+    ? "https://eubuccodissemination.fsn1.your-objectstorage.com"
+    : "/api";;
 
 map.on("load", () => {
     const styles_control = new BuildingsStyleControl(STYLES);

@@ -1,0 +1,9 @@
+{
+  "CORSRules": [
+    {
+      "AllowedOrigins": ["https://alexandre-bry.github.io/EUBUCCO-Dissemination"],
+      "AllowedHeaders": ["*"],
+      "AllowedMethods": ["GET", "HEAD"]
+    }
+  ]
+}
