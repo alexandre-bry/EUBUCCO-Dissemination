@@ -1,28 +1,15 @@
 [project]
 name = "eubucco-dissemination"
 version = "0.1.0"
-requires-python = ">=3.13"
+requires-python = ">=3.11"
 dependencies = [
-    "aiohttp>=3.13.2",   # Necessary for fsspec
-    "duckdb>=1.4.3",
-    "gdal>=3.11.4",
-    "geopandas>=1.1.1",
-    "geoparquet-io>=0.6.1",
-    "pyarrow>=22.0.0",
+  "aiohttp>=3.13.2",      # Necessary for fsspec
+  "boto3>=1.41.5",
+  "duckdb>=1.4.3",
+  "gdal>=3.12.1",
+  "geopandas>=1.1.1",
+  "geoparquet-io==0.8.0",
+  "h3>=4.4.1",
+  "pyarrow>=22.0.0",
+  "python-dotenv>=1.2.1",
 ]
-
-[tool.uv.sources]
-gdal = [
-  { index = "gdal-wheels", marker = "sys_platform == 'linux'" },
-  { index = "geospatial_wheels", marker = "sys_platform == 'win32'" },
-]
-
-[[tool.uv.index]]
-name = "geospatial_wheels"
-url = "https://nathanjmcdougall.github.io/geospatial-wheels-index/"
-explicit = true
-
-[[tool.uv.index]]
-name = "gdal-wheels"
-url = "https://gitlab.com/api/v4/projects/61637378/packages/pypi/simple"
-explicit = true
