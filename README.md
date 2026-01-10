@@ -22,8 +22,7 @@ After that, any command can be run by either activating the environment or runni
 
 The code for the website is in [`./website/`](./website/).
 First install `npm`.
-Then, download the necessary data from the OneDrive and put it in [`./website/public/`](./website/public/).
-Finally, you can run the website with:
+Then, you can run the website with:
 
 ```bash
 cd website
