@@ -3,11 +3,13 @@
 Group project as part of the GEO5019-2025 course at TU Delft.
 The goal of this project is to make accessing the [EUBUCCO dataset](https://eubucco.com/data/) quicker and more customizable, both in terms of download and visualization.
 
+The website is available at <https://alexandre-bry.github.io/EUBUCCO-Dissemination/>.
+
 ## Installation
 
 ### Code
 
-The code for dara conversion is in [`./data_conversions/`](./data_conversions/).
+The code for data conversion is in [`./data_conversions/`](./data_conversions/).
 First, install `uv`.
 Then, you can install the project with:
 
@@ -26,8 +28,8 @@ Then, you can run the website with:
 
 ```bash
 cd website
-npm ci          # to install packages
-npm run dev     # to run
+npm ci              # to install packages
+npm run dev:host    # to run
 ```
 
 ## Tools
