@@ -12,7 +12,10 @@ from typing import Dict, Iterable, List, Literal, Tuple
 
 import aiofiles
 import aiohttp
+import boto3
 import geopandas as gpd
+from botocore.exceptions import ClientError, EndpointConnectionError
+from dotenv import dotenv_values
 from pydantic import BaseModel
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
@@ -111,7 +114,10 @@ async def download_admin_one_country_one_level(
             async with session.get(meta_url) as resp:
                 resp.raise_for_status()
                 meta = await resp.json()
-        except aiohttp.client_exceptions.ClientResponseError as e:
+        except Exception as e:
+            e.add_note(
+                f"This probably means that the country code ({country_code}) or the administrative level ({level}) doesn't exist."
+            )
             raise e
 
         geojson_url = meta.get("gjDownloadURL", None)
@@ -130,6 +136,7 @@ async def download_admin_one_country_one_level(
                 unit_scale=True,
                 desc=f"{country_code}-{level}",
                 colour="green",
+                leave=False,
             )
 
             # Stream the response to disk in binary mode
@@ -174,8 +181,8 @@ async def download_admin(
     Entry point: open a single aiohttp session and run all country queries concurrently.
     """
     logging.info(f"Downloading the administrative boundaries...")
-    timeout = aiohttp.ClientTimeout(total=30)
-    async with aiohttp.ClientSession(timeout=timeout) as session:
+    download_timeout = aiohttp.ClientTimeout(total=None, sock_connect=10, sock_read=300)
+    async with aiohttp.ClientSession(timeout=download_timeout) as session:
         # Run each country's set of requests concurrently as well
         areas_per_country = await asyncio.gather(
             *(
@@ -188,6 +195,29 @@ async def download_admin(
 
     logging.info(f"Done downloading the administrative boundaries.")
     return dict(zip(country_codes, areas_per_country))
+
+
+async def get_buildings_country_codes_and_urls() -> Dict[str, str]:
+    logging.info(f"Finding all buildings country codes and download links...")
+    meta_url = "https://api.eubucco.com/v0.1/countries"
+
+    meta_timeout = aiohttp.ClientTimeout(total=15)
+    async with aiohttp.ClientSession(timeout=meta_timeout) as session:
+        async with session.get(meta_url) as resp:
+            resp.raise_for_status()
+            meta = await resp.json()
+
+    code_to_url: dict[str, str] = {}
+    for country_meta in meta:
+        gpkg_info = country_meta.get("gpkg")
+        gpkg_name: str = gpkg_info.get("name")
+        if "OTHER-LICENSE" in gpkg_name:
+            continue
+        country_code = gpkg_name.split("-")[1].split(".")[0]
+        code_to_url[country_code] = gpkg_info.get("download_link")
+
+    logging.info(f"Done finding all buildings country codes and download links.")
+    return code_to_url
 
 
 async def download_buildings_one_country(
@@ -243,23 +273,12 @@ async def download_buildings(
     country_codes: List[str], output_dir: Path, overwrite: bool = False
 ) -> dict[str, BuildingsInfo]:
     logging.info(f"Downloading the buildings...")
-    meta_url = "https://api.eubucco.com/v0.1/countries"
+    code_to_url = await get_buildings_country_codes_and_urls()
+    code_to_url = {
+        code: url for (code, url) in code_to_url.items() if code in country_codes
+    }
 
-    logging.info(f"Querying the metadata...")
-    meta_timeout = aiohttp.ClientTimeout(total=15)
-    async with aiohttp.ClientSession(timeout=meta_timeout) as session:
-        async with session.get(meta_url) as resp:
-            resp.raise_for_status()
-            meta = await resp.json()
-
-    logging.info(f"Querying the buildings...")
-    code_to_url: dict[str, str] = {}
-    for country_meta in meta:
-        gpkg_info = country_meta.get("gpkg")
-        country_code = gpkg_info.get("name").split("-")[1].split(".")[0]
-        if country_code in country_codes:
-            code_to_url[country_code] = gpkg_info.get("download_link")
-
+    logging.info(f"Downloading the buildings...")
     download_timeout = aiohttp.ClientTimeout(total=None, sock_connect=10, sock_read=300)
     async with aiohttp.ClientSession(timeout=download_timeout) as session:
         save_paths = await asyncio.gather(
@@ -271,7 +290,7 @@ async def download_buildings(
             )
         )
 
-    logging.info(f"Done querying the buildings.")
+    logging.info(f"Done downloading the buildings.")
     return dict(zip(country_codes, save_paths))
 
 
@@ -537,16 +556,12 @@ def join_one_pmtiles(
     return save_path, True
 
 
-def join_pmtiles(
+def join_pmtiles_per_country(
     countries_infos: dict[str, Country],
     output_dir: Path,
     max_workers: int | None = None,
     overwrite: bool = False,
 ) -> List[Tuple[Path, bool]]:
-    """
-    Convert every *.fgb in *fgb_files* to PMTiles using a process pool.
-    Returns a list of (output_path, success) tuples.
-    """
     logging.info("Joining all PMTiles per country...")
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -599,12 +614,58 @@ def join_pmtiles(
     return results
 
 
+def join_pmtiles_all_countries(
+    countries_infos: dict[str, Country], save_path: Path, overwrite: bool = False
+):
+    logging.info("Joining the PMTiles of all countries together...")
+    if save_path.exists() and not overwrite:
+        logging.info(f"Skipping {save_path} which already exists...")
+
+    else:
+        try:
+            translate_cmd = [
+                "tile-join",
+                "-o",
+                str(save_path),
+                *map(lambda p: str(p.pmtiles_path), countries_infos.values()),
+            ]
+
+            _run_cmd(translate_cmd)
+
+        except Exception as exc:
+            logging.error(f"[ERROR] creating {save_path.name} → {exc}")
+            return save_path, False
+
+    logging.info("Done joining the PMTiles of all countries together.")
+
+
+def push_pmtiles(local_path: Path, s3_path: str):
+    logging.info("Pushing the PMTiles to S3 storage...")
+    S3_ENDPOINT = "https://fsn1.your-objectstorage.com"
+    S3_BUCKET = "eubuccodissemination"
+
+    config = dotenv_values(".env")
+
+    client = boto3.client(
+        "s3",
+        endpoint_url=S3_ENDPOINT,
+        aws_access_key_id=config["ACCESS_KEY"],
+        aws_secret_access_key=config["SECRET_KEY"],
+    )
+
+    response = client.upload_file(local_path, S3_BUCKET, s3_path)
+    logging.info("Done pushing the PMTiles to S3 storage.")
+
+
 if __name__ == "__main__":
-    country_codes = ["EST"]
     data_dir = Path("../data/")
     setup_logging(verbose=Verbose.Info)
 
     with logging_redirect_tqdm():
+        # Get all the country codes
+        country_codes = list(asyncio.run(get_buildings_country_codes_and_urls()).keys())
+        country_codes = ["LUX", "LVA"]
+
         # Download the administrative boundaries
         admin_dir = data_dir / "admin_boundaries"
         countries_admin_infos = asyncio.run(
@@ -628,17 +689,17 @@ if __name__ == "__main__":
         successes = [p for p, ok in results if ok]
         failures = [p for p, ok in results if not ok]
 
-        print("\n=== Conversion summary ===")
-        print(f"✅ Successfully converted: {len(successes)}")
-        for p in successes:
-            print(f"   • {p.name}")
+        # print("\n=== Conversion summary ===")
+        # print(f"✅ Successfully converted: {len(successes)}")
+        # for p in successes:
+        #     print(f"   • {p.name}")
 
-        if failures:
-            print(f"\n❌ Failed conversions ({len(failures)}):")
-            for p in failures:
-                print(f"   • {p.name}")
-        else:
-            print("\nAll files converted without error!")
+        # if failures:
+        #     print(f"\n❌ Failed conversions ({len(failures)}):")
+        #     for p in failures:
+        #         print(f"   • {p.name}")
+        # else:
+        #     print("\nAll files converted without error!")
 
         countries_infos = {}
         for code in country_codes:
@@ -656,8 +717,19 @@ if __name__ == "__main__":
 
         # Join everything in each country into one PMTiles
         country_pmtiles_dir = data_dir / "pmtiles" / "country"
-        results = join_pmtiles(
+        results = join_pmtiles_per_country(
             countries_infos=countries_infos,
             output_dir=country_pmtiles_dir,
             overwrite=False,
         )
+
+        # Join the PMTiles of all countries together
+        final_pmtiles_path = data_dir / "pmtiles" / "all_countries.pmtiles"
+        results = join_pmtiles_all_countries(
+            countries_infos=countries_infos,
+            save_path=final_pmtiles_path,
+            overwrite=False,
+        )
+
+        # Push the file to the server
+        push_pmtiles(local_path=final_pmtiles_path, s3_path="all_countries.pmtiles")

@@ -255,7 +255,8 @@ const S3_PATH = import.meta.env.PROD
 
 map.on("load", () => {
     const styles_control = new BuildingsStyleControl(STYLES);
-    load_pmtiles(S3_PATH + "/pmtiles/" + "v0_1-CYP.pmtiles");
-    load_pmtiles(S3_PATH + "/pmtiles/" + "v0_1-BGR.pmtiles");
+    load_pmtiles(S3_PATH + "/all_countries.pmtiles");
+    // load_pmtiles(S3_PATH + "/pmtiles/" + "v0_1-CYP.pmtiles");
+    // load_pmtiles(S3_PATH + "/pmtiles/" + "v0_1-BGR.pmtiles");
     map.addControl(styles_control, "top-left");
 });
