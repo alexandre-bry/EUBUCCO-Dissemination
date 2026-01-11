@@ -448,6 +448,7 @@ def convert_one_to_pmtiles(
                 "-l",
                 layer,
                 "--coalesce-densest-as-needed",
+                "--drop-densest-as-needed",
                 str(input_path),
             ]
 
