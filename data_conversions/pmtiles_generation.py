@@ -8,17 +8,21 @@ import subprocess
 from enum import Enum
 from pathlib import Path
 from pprint import pprint
-from typing import Dict, Iterable, List, Literal, Tuple
+from typing import Annotated, Dict, Iterable, List, Literal, Tuple
 
 import aiofiles
 import aiohttp
 import boto3
 import geopandas as gpd
+import typer
 from botocore.exceptions import ClientError, EndpointConnectionError
 from dotenv import dotenv_values
 from pydantic import BaseModel
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
+
+app = typer.Typer()
+
 
 ADMIN_LEVELS = ["ADM0", "ADM1", "ADM2"]
 BASE_ZOOM_VALUE = 0.5 * math.log2(20000000) + 9
@@ -31,6 +35,20 @@ class Verbose(Enum):
     Warning = logging.WARNING
     Info = logging.INFO
     Debug = logging.DEBUG
+
+    @classmethod
+    def from_int(cls, verbose_int: int):
+        match verbose_int:
+            case 0:
+                return cls.Error
+            case 1:
+                return cls.Warning
+            case 2:
+                return cls.Info
+            case 3:
+                return cls.Debug
+            case _:
+                raise RuntimeError("Verbose has only 4 possible values.")
 
 
 def setup_logging(verbose: Verbose):
@@ -110,7 +128,7 @@ async def download_admin_one_country_one_level(
     output_dir.mkdir(parents=True, exist_ok=True)
     save_path = output_dir / f"{country_code}-{level}.geojson"
     if save_path.exists() and not overwrite:
-        logging.info(f"Skipping {save_path} which already exists...")
+        logging.info(f"Skipping {save_path} which already exists.")
 
     else:
         meta_url = (
@@ -244,7 +262,7 @@ async def download_buildings_one_country(
     save_path = output_dir / f"{safe_code}.gpkg.zip"
 
     if save_path.exists() and not overwrite:
-        logging.info(f"Skipping {save_path} which already exists...")
+        logging.info(f"Skipping {save_path} which already exists.")
 
     else:
         try:
@@ -333,7 +351,7 @@ def convert_one_to_flatgeobuf(
     )
 
     if save_path.exists() and not overwrite:
-        logging.info(f"Skipping {save_path} which already exists...")
+        logging.info(f"Skipping {save_path} which already exists.")
 
     else:
         try:
@@ -417,7 +435,7 @@ def convert_one_to_pmtiles(
     )
 
     if save_path.exists() and not overwrite:
-        logging.info(f"Skipping {save_path} which already exists...")
+        logging.info(f"Skipping {save_path} which already exists.")
 
     else:
         try:
@@ -543,7 +561,7 @@ def join_one_pmtiles(
     overwrite: bool,
 ) -> Tuple[Path, bool]:
     if save_path.exists() and not overwrite:
-        logging.info(f"Skipping {save_path} which already exists...")
+        logging.info(f"Skipping {save_path} which already exists.")
 
     else:
         try:
@@ -626,7 +644,7 @@ def join_pmtiles_all_countries(
 ):
     logging.info("Joining the PMTiles of all countries together...")
     if save_path.exists() and not overwrite:
-        logging.info(f"Skipping {save_path} which already exists...")
+        logging.info(f"Skipping {save_path} which already exists.")
 
     else:
         try:
@@ -664,15 +682,55 @@ def push_pmtiles(local_path: Path, s3_path: str):
     logging.info("Done pushing the PMTiles to S3 storage.")
 
 
-if __name__ == "__main__":
-    data_dir = Path("../data/")
-    setup_logging(verbose=Verbose.Info)
+@app.command("make_pmtiles")
+def make_pmtiles(
+    data_dir: Annotated[
+        Path,
+        typer.Option(
+            "-d", "--data_dir", help="Main directory of the data.", exists=True
+        ),
+    ],
+    country_codes: Annotated[
+        List[str] | None,
+        typer.Option(
+            "-c",
+            "--country_code",
+            help="Codes of the countries to process.",
+        ),
+    ] = None,
+    negative_country_codes: Annotated[
+        List[str],
+        typer.Option(
+            "-n",
+            "--not_country_code",
+            help="Codes of the countries to not process.",
+        ),
+    ] = [],
+    verbose_int: Annotated[int, typer.Option("--verbose", "-v", count=True)] = 0,
+):
+
+    setup_logging(verbose=Verbose.from_int(verbose_int))
 
     with logging_redirect_tqdm():
         # Get all the country codes
-        country_codes = set(asyncio.run(get_buildings_country_codes_and_urls()).keys())
-        country_codes.remove("CZE")  # Has multiple layers which makes the process crash
-        country_codes = list(country_codes)
+        if country_codes is None:
+            country_codes_set = set(
+                asyncio.run(get_buildings_country_codes_and_urls()).keys()
+            )
+        else:
+            country_codes_set = set(country_codes)
+
+        # CZE has multiple layers which makes the process crash
+        if "CZE" in country_codes_set:
+            logging.info(
+                "Removing 'CZE' from the list because its format is not supported yet."
+            )
+            country_codes_set.remove("CZE")
+
+        for negative_country_code in negative_country_codes:
+            country_codes_set.remove(negative_country_code)
+
+        country_codes = list(country_codes_set)
 
         # Download the administrative boundaries
         admin_dir = data_dir / "admin_boundaries"
@@ -741,6 +799,10 @@ if __name__ == "__main__":
 
         # Push the file to the server
         push_pmtiles(local_path=final_pmtiles_path, s3_path="all_countries.pmtiles")
+
+
+if __name__ == "__main__":
+    app()
 
 # Look at displaying the progress of the subprocesses
 # Handle CZE with its multiple layers
