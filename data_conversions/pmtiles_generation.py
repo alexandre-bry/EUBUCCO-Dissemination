@@ -46,6 +46,13 @@ def _safe_name(code: str) -> str:
     return "".join(c if c.isalnum() or c in "-_" else "_" for c in code)
 
 
+async def _get_content_length(session: aiohttp.ClientSession, url: str) -> int:
+    """Issue a HEAD request to fetch the Content-Length header."""
+    async with session.head(url, allow_redirects=True) as resp:
+        resp.raise_for_status()
+        return int(resp.headers.get("Content-Length", 0))
+
+
 class AdminInfo(BaseModel):
     geojson_path: Path
     pmtiles_path: Path | None = None
@@ -136,7 +143,7 @@ async def download_admin_one_country_one_level(
                 unit_scale=True,
                 desc=f"{country_code}-{level}",
                 colour="green",
-                leave=False,
+                leave=True,
             )
 
             # Stream the response to disk in binary mode
@@ -242,7 +249,7 @@ async def download_buildings_one_country(
     else:
         try:
             async with session.get(data_url) as resp:
-                resp.raise_for_status()  # Raise for HTTP errors
+                resp.raise_for_status()
 
                 total_bytes = int(resp.headers.get("Content-Length", 0))
 
@@ -263,7 +270,6 @@ async def download_buildings_one_country(
                 pbar.close()
 
         except aiohttp.ClientError as e:
-            # You can replace this with more sophisticated logging/retry logic
             raise RuntimeError(f"Failed to download {data_url}: {e}") from e
 
     return BuildingsInfo(gpkg_zip_path=save_path)
@@ -333,6 +339,7 @@ def convert_one_to_flatgeobuf(
         try:
             translate_cmd = [
                 "ogr2ogr",
+                "-progress",
                 "-f",
                 "FlatGeoBuf",
                 str(save_path),
@@ -343,7 +350,7 @@ def convert_one_to_flatgeobuf(
             _run_cmd(translate_cmd)
 
         except Exception as exc:
-            logging.error(f"[ERROR] {input_path.name} → {exc}")
+            logging.error(f"{input_path.name} → {exc}")
             return save_path, False
 
     return save_path, True
@@ -431,7 +438,7 @@ def convert_one_to_pmtiles(
             _run_cmd(translate_cmd)
 
         except Exception as exc:
-            logging.error(f"[ERROR] {input_path.name} → {exc}")
+            logging.error(f"{input_path.name} → {exc}")
             return save_path, False
 
     return save_path, True
@@ -550,7 +557,7 @@ def join_one_pmtiles(
             _run_cmd(translate_cmd)
 
         except Exception as exc:
-            logging.error(f"[ERROR] creating {save_path.name} → {exc}")
+            logging.error(f"Creating {save_path.name} → {exc}")
             return save_path, False
 
     return save_path, True
@@ -633,7 +640,7 @@ def join_pmtiles_all_countries(
             _run_cmd(translate_cmd)
 
         except Exception as exc:
-            logging.error(f"[ERROR] creating {save_path.name} → {exc}")
+            logging.error(f"Creating {save_path.name} → {exc}")
             return save_path, False
 
     logging.info("Done joining the PMTiles of all countries together.")
@@ -663,8 +670,9 @@ if __name__ == "__main__":
 
     with logging_redirect_tqdm():
         # Get all the country codes
-        country_codes = list(asyncio.run(get_buildings_country_codes_and_urls()).keys())
-        country_codes = ["LUX", "LVA"]
+        country_codes = set(asyncio.run(get_buildings_country_codes_and_urls()).keys())
+        country_codes.remove("CZE")  # Has multiple layers which makes the process crash
+        country_codes = list(country_codes)
 
         # Download the administrative boundaries
         admin_dir = data_dir / "admin_boundaries"
@@ -733,3 +741,6 @@ if __name__ == "__main__":
 
         # Push the file to the server
         push_pmtiles(local_path=final_pmtiles_path, s3_path="all_countries.pmtiles")
+
+# Look at displaying the progress of the subprocesses
+# Handle CZE with its multiple layers
