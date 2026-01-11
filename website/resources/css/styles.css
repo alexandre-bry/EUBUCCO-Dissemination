@@ -14,7 +14,7 @@
 
     --header-height: 50px;
     --footer-height: 40px;
-    --dark-color-1: #09092e;
+    --dark-color-1: #0a0a23;
 }
 
 body {
@@ -56,7 +56,6 @@ a.header-nav-link:hover {
     position: absolute;
     bottom: 0;
     width: 100%;
-
     height: var(--footer-height);
     display: flex;
     align-items: center;
@@ -123,14 +122,88 @@ a.footer-nav-link:hover {
     flex: 1 1 auto;
     white-space: nowrap;
     text-wrap: balance;
+}
+
+/* Layer Selector */
+.attribute-control-panel {
+    background-color: #ffffff;
+    padding: 12px;
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    min-width: 145px;
+}
+
+.panel-title {
+    font-weight: 600;
+    margin-bottom: 10px;
+    font-size: 14px; 
+    border-bottom: 2px solid #eee;
+    padding-bottom: 5px;
+    color: var(--dark-color-1);
     text-align: left;
 }
 
-/* Stuff for style controls */
-
-.maplibregl-ctrl-group button.style-control {
-    color: var(--dark-color-1);
-
+.attribute-button {
+    display: block;
     width: 100%;
-    padding: 2px 8px;
+    background: none;
+    border: none;
+    padding: 6px 6px;
+    text-align: left;
+    font-size: 14px;
+    font-family: inherit;
+    color: var(--dark-color-1);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.attribute-button:hover {
+    color: #13132b;
+    padding-left: 4px; 
+}
+
+.attribute-button.active {
+    font-weight: 700;
+    color: var(--dark-color-1);
+    background-color: rgb(231, 231, 231);
+}
+
+/* Legend Container */
+.map-legend {
+    background-color: #ffffff;
+    padding: 12px;
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    font-family: inherit; 
+    color: var(--dark-color-1); 
+    width: auto;
+    min-width: 145px;
+    pointer-events: auto; 
+}
+
+
+.legend-title {
+    font-weight: 600;
+    margin-bottom: 10px;
+    font-size: 14px; 
+    border-bottom: 2px solid #eee;
+    padding-bottom: 5px;
+    text-transform: capitalize;
+}
+
+.legend-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 6px;
+    font-size: 14px; 
+    line-height: 1;
+}
+
+.legend-key {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    margin-right: 12px;
+    border-radius: 3px;
+    flex-shrink: 0; 
 }

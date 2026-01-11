@@ -25,32 +25,106 @@ map.addControl(
 const STYLES = ["Height", "Construction year", "Type"];
 const ADMIN_LEVELS = ["ADM0", "ADM1", "ADM2"];
 
-class BuildingsStyleControl {
+const LEGEND_DATA: Record<string, { label: string; color: string }[]> = {
+    "Height": [
+        { label: "0m", color: "#ffd044" },
+        { label: "10m", color: "#ffb300" },
+        { label: "20m", color: "#ff8401" },
+        { label: "30m", color: "#ff5900" },
+        { label: "40m+", color: "#fe3b00" },
+    ],
+    "Construction year": [
+        { label: "Before 1945", color: "#d80004" },
+        { label: "1965", color: "#ff8000" },
+        { label: "1985", color: "#feca2f" },
+        { label: "2005", color: "#83cbe3" },
+        { label: "2025", color: "#0970be" },
+    ],
+    "Type": [
+        { label: "Residential", color: "#003dc1" },
+        { label: "Non-residential", color: "#ffb300" },
+        { label: "Other", color: "#ddd" },
+    ]
+};
+
+class LegendControl {
     _container: HTMLElement;
     _map: maplibregl.Map | undefined;
-    styles: string[];
 
-    constructor(styles: string[]) {
-        this.styles = styles;
-
+    constructor() {
         this._container = document.createElement("div");
-        this._container.className = "maplibregl-ctrl maplibregl-ctrl-group";
-        this._map = undefined;
+        this._container.className = "maplibregl-ctrl map-legend";
     }
 
     onAdd(map: maplibregl.Map) {
         this._map = map;
-        this._map.setGlobalStateProperty("current-style", "Height");
+        this.updateLegend("Height"); // Initial state
+        return this._container;
+    }
+
+    updateLegend(styleName: string) {
+        const data = LEGEND_DATA[styleName];
+        if (!data) return;
+
+        this._container.innerHTML = `<div class="legend-title">${styleName}</div>`;
+        
+        data.forEach(item => {
+            const row = document.createElement("div");
+            row.className = "legend-row";
+            row.innerHTML = `
+                <span class="legend-key" style="background-color: ${item.color}"></span>
+                <span>${item.label}</span>
+            `;
+            this._container.appendChild(row);
+        });
+    }
+
+    onRemove() {
+        this._container.parentNode?.removeChild(this._container);
+        this._map = undefined;
+    }
+}
+
+class BuildingsStyleControl {
+    _container: HTMLElement;
+    _map: maplibregl.Map | undefined;
+    styles: string[];
+    legend: LegendControl;
+
+    constructor(styles: string[], legend: LegendControl) {
+        this.styles = styles;
+        this.legend = legend;
+        
+        this._container = document.createElement("div");
+        this._container.className = "maplibregl-ctrl attribute-control-panel";
+    }
+
+    onAdd(map: maplibregl.Map) {
+        this._map = map;
+
+        const title = document.createElement("div");
+        title.className = "panel-title";
+        title.textContent = "Map Layers"; 
+        this._container.appendChild(title);
 
         this.styles.forEach((style) => {
             let button = document.createElement("button");
-            button.className = "style-control";
+            button.className = "attribute-button";
+            
+            if (style === "Height") button.classList.add("active");
+            
             button.textContent = style;
-            button.addEventListener("click", (_) => {
-                if (!this._map) {
-                    return;
-                }
+            button.addEventListener("click", () => {
+                if (!this._map) return;
+
                 this._map.setGlobalStateProperty("current-style", style);
+                
+                this.legend.updateLegend(style);
+                
+                this._container.querySelectorAll('.attribute-button').forEach(btn => 
+                    btn.classList.remove('active')
+                );
+                button.classList.add('active');
             });
             this._container.appendChild(button);
         });
@@ -59,9 +133,7 @@ class BuildingsStyleControl {
     }
 
     onRemove() {
-        if (this._container.parentNode) {
-            this._container.parentNode.removeChild(this._container);
-        }
+        this._container.parentNode?.removeChild(this._container);
         this._map = undefined;
     }
 }
@@ -102,15 +174,15 @@ function load_pmtiles(url: string) {
                             ["linear"],
                             ["get", "height"],
                             0,
-                            "#648FFF",
+                            "#ffd044",
                             10,
-                            "#785EF0",
+                            "#ffb300",
                             20,
-                            "#DC267F",
+                            "#ff8401",
                             30,
-                            "#FE6100",
+                            "#ff5900",
                             40,
-                            "#FFB000",
+                            "#fe3b00",
                         ],
                     ],
                     "Construction year",
@@ -124,15 +196,15 @@ function load_pmtiles(url: string) {
                             ["linear"],
                             ["get", "age"],
                             1945,
-                            "#648FFF",
+                            "#d80004",
                             1965,
-                            "#785EF0",
+                            "#ff8000",
                             1985,
-                            "#DC267F",
+                            "#feca2f",
                             2005,
-                            "#FE6100",
+                            "#83cbe3",
                             2025,
-                            "#FFB000",
+                            "#0970be",
                         ],
                     ],
                     "Type",
@@ -140,9 +212,9 @@ function load_pmtiles(url: string) {
                         "match",
                         ["get", "type"],
                         "residential",
-                        "#648FFF",
+                        "#003dc1",
                         "non-residential",
-                        "#FFB000",
+                        "#ffb300",
                         "#ddd",
                     ],
                     "#ddd",
@@ -254,9 +326,11 @@ const S3_PATH = import.meta.env.PROD
     : "/api";
 
 map.on("load", () => {
-    const styles_control = new BuildingsStyleControl(STYLES);
+    const legend = new LegendControl(); 
+    const styles_control = new BuildingsStyleControl(STYLES, legend);
     load_pmtiles(S3_PATH + "/all_countries.pmtiles");
-    // load_pmtiles(S3_PATH + "/pmtiles/" + "v0_1-CYP.pmtiles");
+        // load_pmtiles(S3_PATH + "/pmtiles/" + "v0_1-CYP.pmtiles");
     // load_pmtiles(S3_PATH + "/pmtiles/" + "v0_1-BGR.pmtiles");
     map.addControl(styles_control, "top-left");
+    map.addControl(legend, "bottom-left"); 
 });
