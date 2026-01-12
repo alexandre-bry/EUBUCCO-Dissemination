@@ -692,13 +692,13 @@ def make_pmtiles(
         ),
     ],
     country_codes: Annotated[
-        List[str] | None,
+        List[str],
         typer.Option(
             "-c",
             "--country_code",
             help="Codes of the countries to process.",
         ),
-    ] = None,
+    ] = [],
     negative_country_codes: Annotated[
         List[str],
         typer.Option(
@@ -707,6 +707,9 @@ def make_pmtiles(
             help="Codes of the countries to not process.",
         ),
     ] = [],
+    upload: Annotated[
+        bool, typer.Option("-u", help="Toggle to upload the final PMTiles.")
+    ] = False,
     verbose_int: Annotated[int, typer.Option("--verbose", "-v", count=True)] = 0,
 ):
 
@@ -799,7 +802,8 @@ def make_pmtiles(
         )
 
         # Push the file to the server
-        push_pmtiles(local_path=final_pmtiles_path, s3_path="all_countries.pmtiles")
+        if upload:
+            push_pmtiles(local_path=final_pmtiles_path, s3_path="all_countries.pmtiles")
 
 
 if __name__ == "__main__":
