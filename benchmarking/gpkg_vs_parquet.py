@@ -4,10 +4,10 @@ import time
 import random
 
 #TODO add a code to replace '-' with '_' and atomatically switch to other countries/maybe not necessary
-gpkg_file = "v0_1-CYP.gpkg"
-zipped_gpkg_file = "v0_1-CYP.zip"
-ogr_parquet_file = "v0_1-CYP_ogr2ogr.parquet"
-gpio_parquet_file = "v0_1-CYP_gpio.parquet"
+gpkg_file = "files/v0_1-CYP.gpkg"
+zipped_gpkg_file = "files/v0_1-CYP.gpkg.zip"
+ogr_parquet_file = "files/v0_1-CYP-ogr2ogr.parquet"
+gpio_parquet_file = "files/v0_1-CYP-gpio.parquet"
 
 files = [
     ("gpkg", gpkg_file),
