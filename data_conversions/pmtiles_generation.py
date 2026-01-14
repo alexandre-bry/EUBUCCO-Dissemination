@@ -27,6 +27,7 @@ app = typer.Typer()
 ADMIN_LEVELS = ["ADM0", "ADM1", "ADM2"]
 BASE_ZOOM_VALUE = 0.5 * math.log2(20000000) + 9
 BUILDINGS_LAYER = "buildings"
+BUILDINGS_ZOOM = 4
 MAX_ZOOM = 17
 
 
@@ -321,7 +322,7 @@ async def download_buildings(
 # ----------------------------------------------------------------------
 # Small wrapper to run a shell command and raise a clear exception on failure
 # ----------------------------------------------------------------------
-def _run_cmd(cmd: List[str]) -> None:
+def _run_cmd(cmd: List[str]) -> subprocess.CompletedProcess:
     """Run a command synchronously, raising on non-zero exit."""
     logging.info(" ".join(cmd))
     result = subprocess.run(
@@ -335,6 +336,51 @@ def _run_cmd(cmd: List[str]) -> None:
             f"Command {' '.join(cmd)} failed (code {result.returncode})\n"
             f"stdout: {result.stdout}\nstderr: {result.stderr}"
         )
+    return result
+
+
+def get_layers_from_gpkg(gpkg_path: Path) -> list[str]:
+    """
+    Return a list of layer names in the GeoPackage by parsing ogrinfo output.
+    Assumes lines like: '1: layer_name (Point)'.
+    """
+    cmd = ["ogrinfo", "-ro", str(gpkg_path)]
+    proc = _run_cmd(cmd)
+    layers = []
+    for line in proc.stdout.splitlines():
+        line = line.strip()
+        # Match "1: layername (..."
+        if ":" in line:
+            parts = line.split(":", 1)
+            idx = parts[0].strip()
+            # Ensure first part is an integer index
+            if idx.isdigit():
+                rest = parts[1].strip()
+                if rest:
+                    # layer name is first token, may be quoted
+                    name = rest.split()[0].strip('"')
+                    layers.append(name)
+    logging.info(f"Found these layers in {gpkg_path}: {layers}.")
+    return layers
+
+
+def build_union_sql(layers: List[str]) -> List[str]:
+    """
+    Build a SQLite UNION ALL SQL over all layers: SELECT * FROM l1 UNION ALL SELECT * FROM l2 ...
+    """
+    if len(layers) == 0:
+        raise ValueError("No layers given to build UNION SQL")
+    elif len(layers) == 1:
+        return []
+
+    parts = []
+    for i, layer in enumerate(layers):
+        sel = f"SELECT * FROM '{layer}'"
+        if i == 0:
+            parts.append(sel)
+        else:
+            parts.append("UNION ALL " + sel)
+    return ["-dialect", "SQLite", "-sql", f'"{" ".join(parts)}"']
 
 
 def convert_one_to_flatgeobuf(
@@ -352,25 +398,29 @@ def convert_one_to_flatgeobuf(
 
     if save_path.exists() and not overwrite:
         logging.info(f"Skipping {save_path} which already exists.")
+        return save_path, True
 
-    else:
-        try:
-            translate_cmd = [
-                "ogr2ogr",
-                "-progress",
-                "-f",
-                "FlatGeoBuf",
-                str(save_path),
-                str(input_path),
-                "-t_srs",
-                "EPSG:4326",
-            ]
-            _run_cmd(translate_cmd)
+    gpkg_layers = get_layers_from_gpkg(input_path)
+    union_arguments = build_union_sql(gpkg_layers)
 
-        except Exception as exc:
-            logging.error(f"{input_path.name} → {exc}")
-            return save_path, False
+    try:
+        translate_cmd = [
+            "ogr2ogr",
+            "-progress",
+            "-f",
+            "FlatGeoBuf",
+            str(save_path),
+            str(input_path),
+            "-t_srs",
+            "EPSG:4326",
+        ]
+        translate_cmd.extend(union_arguments)
+        logging.info(" ".join(translate_cmd))
+        _run_cmd(translate_cmd)
 
+    except Exception as exc:
+        logging.error(f"{input_path.name} → {exc}")
+        return save_path, False
     return save_path, True
 
 
@@ -448,7 +498,8 @@ def convert_one_to_pmtiles(
                 "-l",
                 layer,
                 "--coalesce-densest-as-needed",
-                "--drop-densest-as-needed",
+                # "-M",
+                # 1_000_000,
                 str(input_path),
             ]
 
@@ -491,24 +542,36 @@ def convert_to_pmtiles(
             bdgs_info = country_infos.bdgs_info
             country_admin_info = country_infos.admin_info
 
-            zooms: List[Tuple[int, int]] = []
-            prev_zoom = -1
+            start_zooms: List[int] = [0]
 
             # Administrative boundaries
+            # Compute the optimal min zoom for each admin level
             for admin_level in ADMIN_LEVELS[1:]:
 
                 admin_info = country_admin_info.levels[admin_level]
-                zoom = math.ceil(
+                start_zoom = math.ceil(
                     BASE_ZOOM_VALUE - 0.5 * math.log2(admin_info.mean_area)
                 )
-                if zoom <= 10:
-                    zooms.append((prev_zoom + 1, zoom))
-                    prev_zoom = zoom
+                # Make sure the start zoom is higher that the previous one
+                if start_zoom <= start_zooms[-1]:
+                    start_zoom = start_zooms[-1] + 1
+                start_zooms.append(start_zoom)
 
-            for i in range(len(zooms)):
+            # Keep only the levels that fit before the building zoom
+            zooms: List[Tuple[int, int]] = []
+            for i in range(len(start_zooms)):
+                min_zoom = start_zooms[i]
+                if i + 1 < len(start_zooms):
+                    max_zoom = min(BUILDINGS_ZOOM - 1, start_zooms[i + 1])
+                else:
+                    max_zoom = BUILDINGS_ZOOM - 1
+                if min_zoom > max_zoom:
+                    break
+                zooms.append((min_zoom, max_zoom))
+
+            for i, (min_zoom, max_zoom) in enumerate(zooms):
                 admin_level = ADMIN_LEVELS[i]
                 admin_info = country_admin_info.levels[admin_level]
-                min_zoom, max_zoom = zooms[i]
                 futures.append(
                     pool.submit(
                         convert_one_to_pmtiles,
@@ -524,6 +587,10 @@ def convert_to_pmtiles(
 
             # Buildings
             min_zoom = zooms[-1][1] + 1
+            if min_zoom != BUILDINGS_ZOOM:
+                raise RuntimeError(
+                    f"The zoom assigned to buildings ({min_zoom}) is different from the expected BUILDINGS_ZOOM ({BUILDINGS_ZOOM})."
+                )
             futures.append(
                 pool.submit(
                     convert_one_to_pmtiles,
@@ -683,7 +750,7 @@ def push_pmtiles(local_path: Path, s3_path: str):
     logging.info("Done pushing the PMTiles to S3 storage.")
 
 
-@app.command("make_pmtiles")
+@app.command("run_all")
 def make_pmtiles(
     data_dir: Annotated[
         Path,
@@ -724,12 +791,12 @@ def make_pmtiles(
         else:
             country_codes_set = set(country_codes)
 
-        # CZE has multiple layers which makes the process crash
-        if "CZE" in country_codes_set:
-            logging.info(
-                "Removing 'CZE' from the list because its format is not supported yet."
-            )
-            country_codes_set.remove("CZE")
+        # # CZE has multiple layers which makes the process crash
+        # if "CZE" in country_codes_set:
+        #     logging.info(
+        #         "Removing 'CZE' from the list because its format is not supported yet."
+        #     )
+        #     country_codes_set.remove("CZE")
 
         for negative_country_code in negative_country_codes:
             country_codes_set.remove(negative_country_code)
@@ -755,21 +822,6 @@ def make_pmtiles(
             output_dir=buildings_flatgeobuf_dir,
             overwrite=False,
         )
-
-        successes = [p for p, ok in results if ok]
-        failures = [p for p, ok in results if not ok]
-
-        # print("\n=== Conversion summary ===")
-        # print(f"✅ Successfully converted: {len(successes)}")
-        # for p in successes:
-        #     print(f"   • {p.name}")
-
-        # if failures:
-        #     print(f"\n❌ Failed conversions ({len(failures)}):")
-        #     for p in failures:
-        #         print(f"   • {p.name}")
-        # else:
-        #     print("\nAll files converted without error!")
 
         countries_infos = {}
         for code in country_codes:
@@ -810,4 +862,3 @@ if __name__ == "__main__":
     app()
 
 # Look at displaying the progress of the subprocesses
-# Handle CZE with its multiple layers
