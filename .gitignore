@@ -7,4 +7,4 @@ data/
 **/node_modules/
 **/.vite/
 data_conversions/.env
-benchmarking/files
+benchmarking/files/
