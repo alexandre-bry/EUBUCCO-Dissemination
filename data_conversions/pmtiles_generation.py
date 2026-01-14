@@ -784,7 +784,7 @@ def make_pmtiles(
 
     with logging_redirect_tqdm():
         # Get all the country codes
-        if country_codes is None:
+        if len(country_codes) == 0:
             country_codes_set = set(
                 asyncio.run(get_buildings_country_codes_and_urls()).keys()
             )
