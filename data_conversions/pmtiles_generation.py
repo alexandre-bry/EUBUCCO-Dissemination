@@ -5,6 +5,8 @@ import logging
 import math
 import os
 import subprocess
+import tempfile
+import zipfile
 from enum import Enum
 from pathlib import Path
 from pprint import pprint
@@ -89,8 +91,14 @@ class CountryAdminInfo(BaseModel):
 
 class BuildingsInfo(BaseModel):
     gpkg_zip_path: Path
+    gpkg_path: Path | None = None
     fgb_path: Path | None = None
     pmtiles_path: Path | None = None
+
+    def get_gpkg_path(self):
+        if self.gpkg_path is None:
+            raise RuntimeError("gpkg_path was not specified.")
+        return self.gpkg_path
 
     def get_fgb_path(self):
         if self.fgb_path is None:
@@ -339,6 +347,88 @@ def _run_cmd(cmd: List[str]) -> subprocess.CompletedProcess:
     return result
 
 
+def unzip_buildings_one_country(
+    input_zip_path: Path, output_path: Path, overwrite: bool
+):
+    """
+    Unzips the files
+    """
+
+    if output_path.exists() and not overwrite:
+        logging.info(
+            f"The content of {input_zip_path} has already been extracted into {output_path}. Skipping extraction."
+        )
+        return output_path
+
+    with zipfile.ZipFile(input_zip_path, "r") as zip_ref:
+        # Get list of files that would be created (skip directories)
+        files_to_extract = [
+            member for member in zip_ref.namelist() if not member.endswith("/")
+        ]
+
+        if len(files_to_extract) != 1:
+            raise RuntimeError(
+                "Only one file is expected in the zipped GeoPackages of buildings."
+            )
+        file_to_extract = files_to_extract[0]
+
+        # Create unique temp directory in same parent as output
+        with tempfile.TemporaryDirectory(dir=output_path.parent) as temp_dir_str:
+            logging.info(f"Extracting {input_zip_path} into {output_path}...")
+            temp_dir = Path(temp_dir_str)
+
+            # Extract to temp dir (preserves zip structure)
+            zip_ref.extract(file_to_extract, temp_dir)
+
+            # Find extracted file (handles zip path structure)
+            extracted_file = next(temp_dir.rglob("*.gpkg"))
+
+            # Atomic move to final destination
+            extracted_file.rename(output_path)
+            logging.info(f"Done extracting {input_zip_path} into {output_path}.")
+
+        return output_path
+
+
+def unzip_buildings(
+    buildings_infos: dict[str, BuildingsInfo],
+    output_dir: Path,
+    max_workers: int | None = None,
+    overwrite: bool = False,
+):
+    logging.info("Unzipping all zipped GeoPackage of buildings...")
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Use as many workers as there are CPU cores unless overridden
+    workers = (
+        max_workers
+        or (len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else None)
+        or 4
+    )
+
+    with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as pool:
+        futures: List[concurrent.futures.Future[Path]] = []
+
+        for country_code, buildings_info in buildings_infos.items():
+            output_path = output_dir / f"{country_code}.gpkg"
+            futures.append(
+                pool.submit(
+                    unzip_buildings_one_country,
+                    buildings_info.gpkg_zip_path,
+                    output_path,
+                    overwrite,
+                )
+            )
+
+        results = [f.result() for f in concurrent.futures.as_completed(futures)]
+
+        # Store the path of FlatGeoBuf
+        for country_code, result in zip(buildings_infos.keys(), results):
+            buildings_infos[country_code].gpkg_path = result
+
+    logging.info("Done unzipping all zipped GeoPackage of buildings.")
+
+
 def get_layers_from_gpkg(gpkg_path: Path) -> list[str]:
     """
     Return a list of layer names in the GeoPackage by parsing ogrinfo output.
@@ -380,17 +470,16 @@ def build_union_sql(layers: List[str]) -> List[str]:
             parts.append(sel)
         else:
             parts.append("UNION ALL " + sel)
-    return ["-dialect", "SQLite", "-sql", f'"{" ".join(parts)}"']
+    return ["-dialect", "SQLite", "-sql", f"{" ".join(parts)}"]
 
 
 def convert_one_to_flatgeobuf(
     buildings_info: BuildingsInfo, output_dir: Path, overwrite: bool
 ) -> Tuple[Path, bool]:
     """
-    Convert a single <country>.gpkg.zip → <country>.fgb using the gdal_translate CLI.
-    Returns (output_fgb_path, success_flag).
+    Convert a single <country_code>.gpkg → <country_code>.fgb using the ogr2ogr.
     """
-    input_path = buildings_info.gpkg_zip_path
+    input_path = buildings_info.get_gpkg_path()
     save_path = (
         output_dir
         / f"{str(input_path.name).removesuffix("".join(input_path.suffixes))}.fgb"
@@ -415,7 +504,6 @@ def convert_one_to_flatgeobuf(
             "EPSG:4326",
         ]
         translate_cmd.extend(union_arguments)
-        logging.info(" ".join(translate_cmd))
         _run_cmd(translate_cmd)
 
     except Exception as exc:
@@ -498,6 +586,9 @@ def convert_one_to_pmtiles(
                 "-l",
                 layer,
                 "--coalesce-densest-as-needed",
+                "--include=height",
+                "--include=age",
+                "--include=type",
                 # "-M",
                 # 1_000_000,
                 str(input_path),
@@ -779,7 +870,6 @@ def make_pmtiles(
     ] = False,
     verbose_int: Annotated[int, typer.Option("--verbose", "-v", count=True)] = 0,
 ):
-
     setup_logging(verbose=Verbose.from_int(verbose_int))
 
     with logging_redirect_tqdm():
@@ -790,13 +880,6 @@ def make_pmtiles(
             )
         else:
             country_codes_set = set(country_codes)
-
-        # # CZE has multiple layers which makes the process crash
-        # if "CZE" in country_codes_set:
-        #     logging.info(
-        #         "Removing 'CZE' from the list because its format is not supported yet."
-        #     )
-        #     country_codes_set.remove("CZE")
 
         for negative_country_code in negative_country_codes:
             country_codes_set.remove(negative_country_code)
@@ -810,9 +893,15 @@ def make_pmtiles(
         )
 
         # Download the buildings
-        bdgs_gpkg_dir = data_dir / "buildings" / "gpkg"
+        bdgs_gpkg_zip_dir = data_dir / "buildings" / "gpkg"
         bdgs_info = asyncio.run(
-            download_buildings(country_codes, bdgs_gpkg_dir, overwrite=False)
+            download_buildings(country_codes, bdgs_gpkg_zip_dir, overwrite=False)
+        )
+
+        # Unzip the buildings
+        bdgs_gpkg_dir = data_dir / "buildings" / "gpkg_unzipped"
+        unzip_buildings(
+            buildings_infos=bdgs_info, output_dir=bdgs_gpkg_dir, overwrite=False
         )
 
         # Convert the buildings to FlatGeoBuf
