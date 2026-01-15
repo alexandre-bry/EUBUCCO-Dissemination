@@ -1,0 +1,68 @@
+import boto3
+import os
+from pathlib import Path
+from botocore.exceptions import ClientError, EndpointConnectionError
+from dotenv import dotenv_values
+
+# --- CONFIG --- #
+BUCKET_NAME = 'eubuccodissemination'
+S3_ENDPOINT = "https://fsn1.your-objectstorage.com"
+# S3_ENDPOINT = "https://fsn1.your-objectstorage.com"
+
+config = dotenv_values(".env")
+print(config)
+
+client = boto3.client(
+    "s3",
+    endpoint_url=S3_ENDPOINT,
+    aws_access_key_id=config['ACCESS_KEY'],
+    aws_secret_access_key=config['SECRET_KEY'],
+)
+
+def create_bucket(bucket_name : str):
+    client.create_bucket(Bucket = bucket_name)
+
+def upload_folder_to_s3(
+    local_folder: str,
+    bucket_name: str,
+    s3_prefix: str = ""
+):
+    """
+    Uploads a local folder to S3 while preserving directory structure.
+
+    :param local_folder: Path to local folder
+    :param bucket_name: Target S3 bucket
+    :param s3_prefix: Optional prefix inside the bucket
+    """
+
+    local_folder = os.path.abspath(local_folder)
+
+    for root, _, files in os.walk(local_folder):
+        for file in files:
+            local_path = os.path.join(root, file)
+
+            # Relative path inside the folder
+            relative_path = os.path.relpath(local_path, local_folder)
+
+            # Build S3 key
+            s3_key = os.path.join(s3_prefix, relative_path)
+            s3_key = s3_key.replace("\\", "/")  # Windows fix
+
+            try:
+                client.upload_file(local_path, bucket_name, s3_key)
+                print(f"Uploaded: {s3_key}")
+            except (ClientError, EndpointConnectionError) as e:
+                print(f"Failed to upload {local_path}: {e}")
+
+if __name__ == '__main__':
+    path_to_pq = Path("..", "data", "partition", "parquet_h3_res4")
+    """
+    upload_folder_to_s3(local_folder= path_to_pq,
+                        bucket_name= BUCKET_NAME,
+                        s3_prefix = "partition-h3"
+                        )
+    """
+
+    upload_folder_to_s3(local_folder= Path("..", "data", "parquet"),
+                        bucket_name= BUCKET_NAME,
+                        s3_prefix = "partition-country")
