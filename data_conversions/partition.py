@@ -5,6 +5,7 @@ import geopandas as gpd
 import concurrent.futures
 import os
 import logging
+import argparse
 
 from geoparquet_io.core.add_bbox_column import add_bbox_column
 from geoparquet_io.core.hilbert_order import hilbert_order
@@ -120,17 +121,36 @@ def partition_parquet_to_h3_one_country(INPUT_PATH : Path,
 
     print(f"Partitioned {INPUT_PATH} at: {OUTPUT_PATH}")
 
+def cli():
+    parser = argparse.ArgumentParser()
+    sub = parser.add_subparsers(dest="command", required=True)
 
+    p1 = sub.add_parser("gpkg-to-parquet")
+    p1.add_argument("input_dir", type=Path)
+    p1.add_argument("output_dir", type=Path)
+
+    p2 = sub.add_parser("parquet-to-h3")
+    p2.add_argument("input_dir", type=Path)
+    p2.add_argument("output_dir", type=Path)
+
+    args = parser.parse_args()
+
+    if args.command == "gpkg-to-parquet":
+        partition_gpkg_to_parquet(args.input_dir, args.output_dir)
+    elif args.command == "parquet-to-h3":
+        partition_parquet_to_h3(args.input_dir, args.output_dir)
 
 if __name__ == "__main__":
+    cli()
+    """    
     data_mount = Path("..", "data")
     gpkg_dir = data_mount / "gpkg"
     parquet_dir = data_mount / Path("partition", "country")
     h3_dir = data_mount / Path("partition", "parquet_h3_res4")
     
     partition_gpkg_to_parquet(gpkg_dir, parquet_dir)
-  
 
+    """
 
 
     #partition_parquet_to_h3(parquet_dir, h3_dir)
