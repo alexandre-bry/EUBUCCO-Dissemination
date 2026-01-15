@@ -406,7 +406,6 @@ def unzip_buildings(
         or 4
     )
 
-    # Prepare arguments as tuples in submission order
     tasks = [
         (
             buildings_info.gpkg_zip_path,
@@ -417,7 +416,10 @@ def unzip_buildings(
     ]
 
     with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as pool:
-        results = pool.map(unzip_buildings_one_country, tasks)
+        tasks_separated = [
+            [tasks[i][j] for i in range(len(tasks))] for j in range(len(tasks[0]))
+        ]
+        results = pool.map(unzip_buildings_one_country, *tasks_separated)
 
         # Assign results to BuildingsInfo objects in correct order
         for country_code, result in zip(buildings_infos.keys(), results):
@@ -540,7 +542,10 @@ def convert_to_flatgeobufs(
     ]
 
     with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as pool:
-        results = pool.map(convert_one_to_flatgeobuf, tasks)
+        tasks_separated = [
+            [tasks[i][j] for i in range(len(tasks))] for j in range(len(tasks[0]))
+        ]
+        results = pool.map(convert_one_to_flatgeobuf, *tasks_separated)
 
         # Assign results to BuildingsInfo objects in correct order
         for country_code, result in zip(buildings_infos.keys(), results):
@@ -776,7 +781,10 @@ def convert_to_pmtiles(
         tasks_info.append((country_code, BUILDINGS_LAYER))
 
     with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as pool:
-        results = pool.map(convert_one_to_pmtiles, tasks)
+        tasks_separated = [
+            [tasks[i][j] for i in range(len(tasks))] for j in range(len(tasks[0]))
+        ]
+        results = pool.map(convert_one_to_pmtiles, *tasks_separated)
 
         # Assign results to BuildingsInfo objects in correct order
         for (country_code, layer), result in zip(tasks_info, results):
@@ -901,7 +909,10 @@ def join_pmtiles_per_country(
         )
 
     with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as pool:
-        results = pool.map(join_one_pmtiles, tasks)
+        tasks_separated = [
+            [tasks[i][j] for i in range(len(tasks))] for j in range(len(tasks[0]))
+        ]
+        results = pool.map(join_one_pmtiles, *tasks_separated)
 
         # Assign results to BuildingsInfo objects in correct order
         for country_code, result in zip(countries_infos.keys(), results):
