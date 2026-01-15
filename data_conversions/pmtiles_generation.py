@@ -324,7 +324,7 @@ async def download_buildings(
         )
 
     logging.info(f"Done downloading the buildings.")
-    return dict(zip(country_codes, save_paths))
+    return dict(zip(code_to_url.keys(), save_paths))
 
 
 # ----------------------------------------------------------------------
@@ -414,6 +414,8 @@ def unzip_buildings(
         )
         for country_code, buildings_info in buildings_infos.items()
     ]
+
+    print(tasks)
 
     with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as pool:
         tasks_separated = [
