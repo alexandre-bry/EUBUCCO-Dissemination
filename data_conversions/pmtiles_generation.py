@@ -893,13 +893,13 @@ def make_pmtiles(
         )
 
         # Download the buildings
-        bdgs_gpkg_zip_dir = data_dir / "buildings" / "gpkg"
+        bdgs_gpkg_zip_dir = data_dir / "buildings" / "gpkg_zip"
         bdgs_info = asyncio.run(
             download_buildings(country_codes, bdgs_gpkg_zip_dir, overwrite=False)
         )
 
         # Unzip the buildings
-        bdgs_gpkg_dir = data_dir / "buildings" / "gpkg_unzipped"
+        bdgs_gpkg_dir = data_dir / "buildings" / "gpkg"
         unzip_buildings(
             buildings_infos=bdgs_info, output_dir=bdgs_gpkg_dir, overwrite=False
         )
