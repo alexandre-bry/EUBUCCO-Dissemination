@@ -6,6 +6,11 @@ import concurrent.futures
 import os
 import logging
 
+from geoparquet_io.core.add_bbox_column import add_bbox_column
+from geoparquet_io.core.hilbert_order import hilbert_order
+from geoparquet_io.core.partition_by_h3 import partition_by_h3
+from geoparquet_io.core.check_parquet_structure import check_all
+
 def partition_gpkg_to_parquet(
     input_dir : Path,
     output_dir: Path,
@@ -62,7 +67,6 @@ def partition_gpkg_to_parquet_one_country(
     gdf.to_parquet(OUTPUT_PATH)
     print(f"Processed {INPUT_PATH} to {OUTPUT_PATH}")
 
-
 def partition_parquet_to_h3(
     input_dir : Path,
     output_dir: Path,
@@ -96,7 +100,7 @@ def partition_parquet_to_h3(
         tasks_separated = [
             [tasks[i][j] for i in range(len(tasks))] for j in range(len(tasks[0]))
         ]
-        results = pool.map(partition_gpkg_to_parquet_one_country, *tasks_separated)
+        results = pool.map(partition_parquet_to_h3_one_country, *tasks_separated)
         
             #logging.debug(f"Set {country_code}.gpkg_path = {result}")
 
@@ -105,26 +109,28 @@ def partition_parquet_to_h3(
     logging.info("Done converting gpkg to parquet")
 
 def partition_parquet_to_h3_one_country(INPUT_PATH : Path,
-                                        OUTPUT_PATH : Path,
-                                        resolution : int):
+                                        OUTPUT_PATH : Path):
 
     print(f"Reading {INPUT_PATH}")
     # Hilbert-order, h3, partition
     __ = gpio.read(INPUT_PATH) \
         .add_bbox() \
         .partition_by_h3(output_dir = OUTPUT_PATH,
-                         resolution = resolution)
+                         resolution = 4)
 
     print(f"Partitioned {INPUT_PATH} at: {OUTPUT_PATH}")
+
+
 
 if __name__ == "__main__":
     data_mount = Path("..", "data")
     gpkg_dir = data_mount / "gpkg"
     parquet_dir = data_mount / Path("partition", "country")
     h3_dir = data_mount / Path("partition", "parquet_h3_res4")
-    #partition_gpkg_to_parquet(IN_DIR, OUT_DIR)
+    
+    partition_gpkg_to_parquet(gpkg_dir, parquet_dir)
   
 
-    #partition_parquet_to_h3(parquet_dir, h3_dir)
 
-    partition_gpkg_to_parquet_one_country(parquet_dir / "CYP.parquet", h3_dir)
+
+    #partition_parquet_to_h3(parquet_dir, h3_dir)
