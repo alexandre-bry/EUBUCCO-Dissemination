@@ -15,6 +15,7 @@
         "vite": "^7.2.4"
     },
     "dependencies": {
+        "@duckdb/duckdb-wasm": "^1.33.1-dev18.0",
         "mapbox-gl": "^3.17.0",
         "maplibre-gl": "^5.15.0",
         "pmtiles": "^4.3.0"

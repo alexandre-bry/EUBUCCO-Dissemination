@@ -2,20 +2,102 @@
 <html lang="en">
     <head>
         <meta charset="UTF-8" />
-        <link
-            rel="icon"
-            type="image/svg+xml"
-            href="https://eubuccodissemination.fsn1.your-objectstorage.com/icons/Eubucco-icon.jpg"
-        />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>EUBUCCO Dissemination - Data</title>
         <link rel="stylesheet" href="resources/css/styles.css" />
         <script src="resources/js/header.ts" type="module" defer></script>
         <script src="resources/js/footer.ts" type="module" defer></script>
+        <script src="resources/js/dataDownload.ts" type="module" defer></script>
     </head>
     <body>
         <header-component></header-component>
-        <div class="content"><h1>Download the data</h1></div>
+
+        <main class="content">
+            <h1>Download EUBUCCO data</h1>
+            <p>Choose from 27 European countries to download the whole dataset, or filter by administrative region or custom coordinates.</p>
+
+            <div class="download-card">
+                <div class="download-section">
+                    <h3>1. Select Region</h3>
+                    <div class="input-group">
+                        <label for="country-select">Country</label>
+                        <select id="country-select">
+                            <option value="">---Select country---</option>
+                            <option value="at">Austria</option>
+                            <option value="be">Belgium</option>
+                            <option value="bg">Bulgaria</option>
+                            <option value="hr">Croatia</option>
+                            <option value="cy">Cyprus</option>
+                            <option value="cz">Czechia</option>
+                            <option value="dk">Denmark</option>
+                            <option value="ee">Estonia</option>
+                            <option value="fi">Finland</option>
+                            <option value="fr">France</option>
+                            <option value="de">Germany</option>
+                            <option value="el">Greece</option>
+                            <option value="hu">Hungary</option>
+                            <option value="ie">Ireland</option>
+                            <option value="it">Italy</option>
+                            <option value="lv">Latvia</option>
+                            <option value="lt">Lithuania</option>
+                            <option value="lu">Luxembourg</option>
+                            <option value="nl">Netherlands</option>
+                            <option value="pl">Poland</option>
+                            <option value="pt">Portugal</option>
+                            <option value="ro">Romania</option>
+                            <option value="sk">Slovakia</option>
+                            <option value="es">Spain</option>
+                            <option value="se">Sweden</option>
+                            <option value="ch">Switzerland</option>
+                        </select>
+                    </div>
+
+                    <div class="input-group" id="admin-group" style="opacity: 0.6;">
+                        <label for="admin-select">Administrative Boundary (tba)</label>
+                        <select id="admin-select" disabled>
+                            <option value="">---Select Region---</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="divider">OR</div>
+
+                <div class="download-section">
+                    <h3>2. Bounding Box (EPSG:4326)</h3>
+                    <div class="bbox-grid">
+                        <div class="bbox-input">
+                            <label>Min Lon</label>
+                            <input type="number" id="min-lon" step="0.0001" placeholder="-5.0">
+                        </div>
+                        <div class="bbox-input">
+                            <label>Min Lat</label>
+                            <input type="number" id="min-lat" step="0.0001" placeholder="42.0">
+                        </div>
+                        <div class="bbox-input">
+                            <label>Max Lon</label>
+                            <input type="number" id="max-lon" step="0.0001" placeholder="8.0">
+                        </div>
+                        <div class="bbox-input">
+                            <label>Max Lat</label>
+                            <input type="number" id="max-lat" step="0.0001" placeholder="51.0">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="download-section format-selection">
+                    <h3>3. Choose download format</h3>
+                    <div class="input-group">
+                        <select id="format-select">
+                            <option value="fgb">FlatGeobuf (.fgb)</option>
+                            <option value="geoparquet">GeoParquet (.parquet)</option>
+                        </select> 
+                    </div>
+
+                    <button id="download-btn" class="main-download-btn">Download my selection</button>
+                    <div id="status-message"></div>
+                </div>
+            </div> </main>
+
         <footer-component></footer-component>
     </body>
 </html>

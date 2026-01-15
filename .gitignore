@@ -8,3 +8,6 @@ data/
 **/.vite/
 data_conversions/.env
 benchmarking/files/
+.env
+website/.env
+data_conversions/update_cors.py
