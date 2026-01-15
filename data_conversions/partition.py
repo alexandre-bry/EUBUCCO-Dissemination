@@ -1,104 +1,128 @@
 # External
 import geoparquet_io as gpio
-from geoparquet_io.core.add_bbox_column import add_bbox_column
-from geoparquet_io.core.hilbert_order import hilbert_order
-from geoparquet_io.core.partition_by_h3 import partition_by_h3
-from geoparquet_io.core.check_parquet_structure import check_all
 from pathlib import Path
 import geopandas as gpd
-import h3
-from shapely.geometry import mapping
+import concurrent.futures
+import os
+import logging
 
-# Internal
-from main import gpkg_to_parquet_geopandas, gpkg_to_parquet_gpio
-
-def partition_gpkg_by_country_h3(gpkg_path : Path,
-                              resolution : int):
+def partition_gpkg_to_parquet(
+    input_dir : Path,
+    output_dir: Path,
+    max_workers: int | None = None,
+    overwrite: bool = False,
+):
     
+    all_files = list(input_dir.glob("*.gpkg"))
+    print(all_files)
+
+    print(f"Converting all gpkg in {input_dir} to {output_dir}")
+    #output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Use as many workers as there are CPU cores unless overridden
+    workers = (
+        max_workers
+        or (len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else None)
+        or 4
+    )
+
+    tasks = [
+        (
+            file,
+            output_dir / f"{file.stem}.parquet"
+        )
+        for file in all_files
+    ]
+
+    with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as pool:
+        tasks_separated = [
+            [tasks[i][j] for i in range(len(tasks))] for j in range(len(tasks[0]))
+        ]
+        results = pool.map(partition_gpkg_to_parquet_one_country, *tasks_separated)
+        
+            #logging.debug(f"Set {country_code}.gpkg_path = {result}")
+
+
+    print(list(results))
+    logging.info("Done converting gpkg to parquet")
+
+def partition_gpkg_to_parquet_one_country(
+        INPUT_PATH : Path,
+        OUTPUT_PATH : Path,
+):
     # Read the GeoPackage
-    gdf = gpd.read_file(gpkg_path)
+    gdf = gpd.read_file(INPUT_PATH)
 
     # Convert to WGS84 if not already
     if gdf.crs.to_epsg() != 4326:
         gdf = gdf.to_crs(epsg=4326)
-        print("Converted GeoDataFrame to WGS84 (EPSG:4326)")
+        #print("Converted GeoDataFrame to WGS84 (EPSG:4326)")
     
     # Save to parquet for gpio workflow
-    gdf.to_parquet(PATH_PQ)
+    gdf.to_parquet(OUTPUT_PATH)
+    print(f"Processed {INPUT_PATH} to {OUTPUT_PATH}")
 
-    # Hilbert-order, h3
-    """
-    __ = gpio.read(PATH_PQ) \
-        .add_bbox() \
-        .sort_hilbert() \
-        .add_h3(resolution = resolution, column_name= f"h3_res{resolution}") \
-        .write(PATH_PQ)
-"""
+
+def partition_parquet_to_h3(
+    input_dir : Path,
+    output_dir: Path,
+    max_workers: int | None = None,
+    overwrite: bool = False,
+):
+    
+    all_files = list(input_dir.glob("*.parquet"))
+    print(all_files)
+
+    print(f"Converting all parquet in {input_dir} to {output_dir}")
+    #output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Use as many workers as there are CPU cores unless overridden
+    workers = (
+        max_workers
+        or (len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else None)
+        or 4
+    )
+
+    tasks = [
+        (
+            file,
+            output_dir
+        )
+        for file in all_files
+    ]
+    print(tasks)
+
+    with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as pool:
+        tasks_separated = [
+            [tasks[i][j] for i in range(len(tasks))] for j in range(len(tasks[0]))
+        ]
+        results = pool.map(partition_gpkg_to_parquet_one_country, *tasks_separated)
+        
+            #logging.debug(f"Set {country_code}.gpkg_path = {result}")
+
+
+    print(list(results))
+    logging.info("Done converting gpkg to parquet")
+
+def partition_parquet_to_h3_one_country(INPUT_PATH : Path,
+                                        OUTPUT_PATH : Path,
+                                        resolution : int):
 
     # Hilbert-order, h3, partition
-    __ = gpio.read(PATH_PQ) \
+    __ = gpio.read(INPUT_PATH) \
         .add_bbox() \
-        .partition_by_h3(output_dir = OUT_DIR, resolution = resolution)
+        .partition_by_h3(output_dir = OUTPUT_PATH,
+                         resolution = resolution)
 
-
-    # Partition
-
-
+    print(f"Partitioned {INPUT_PATH} at: {OUTPUT_PATH}")
 
 if __name__ == "__main__":
     DATA_DIR = Path("..", "data") # Home data mount
     IN_DIR = DATA_DIR / "gpkg" # Folder with all gpkg
-    OUT_DIR = DATA_DIR / "partition" / "parquet-h3" # One partition location
-    
-    
-    SAMPLE_FILE = IN_DIR / "v0_1-CYP.gpkg"
-    PATH_PQ = Path("..", "data", "parquet", "cyprus.parquet")
+    #OUT_DIR = DATA_DIR / "partition" / "country" # One partition location
 
-    # Call to partitioning
-    partition_gpkg_by_country_h3(gpkg_path = SAMPLE_FILE, resolution = 4)
+    IN_DIR = Path("..", "data", "partition", "country")
+    OUT_DIR = DATA_DIR / "partition" / "parquet_h3_res4"
 
-
-    # Read with gpd
-    #f = gpd.read_parquet(PATH_PQ)
-    #print(f)
-
-    #print(f" Number of unique h3: {set(f["h3_res4"])}")
-
-
-
-
-"""
-    # Pathlib does not work with check_parquet_structure
-    man_path = "/Users/carlocordes/Library/CloudStorage/OneDrive-Personal/MSc_Carlo/5019_Studio/EUBUCCO-Dissemination/data/parquet/cyprus.parquet"
-
-    # Convert
-    gpkg_to_parquet_gpio(PATH_GPKG, PATH_PQ)
-
-
-    # Sort by Hilbert curve
-    hilbert_order(
-        input_parquet=man_path,
-        output_parquet=man_path,
-        geometry_column="geometry",
-        verbose=True
-    )
-
-    partition_by_h3(
-        input_parquet=man_path,
-        output_folder="output/partition",
-        resolution=2,
-        hive=False,
-        verbose=True,
-        force = True
-    )
-    check_all(man_path)
-
-# Partition by H3
-partition_by_h3(
-    input_parquet="input.parquet",
-    output_folder="output/",
-    resolution=9,
-    hive=False,
-    verbose=True
-)
-"""
+    #partition_gpkg_to_parquet(IN_DIR, OUT_DIR)
+    partition_parquet_to_h3(IN_DIR, OUT_DIR)
