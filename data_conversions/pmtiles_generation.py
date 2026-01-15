@@ -19,6 +19,7 @@ import geopandas as gpd
 import typer
 from botocore.exceptions import ClientError, EndpointConnectionError
 from dotenv import dotenv_values
+from osgeo import gdal
 from pydantic import BaseModel
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
@@ -258,73 +259,89 @@ async def download_buildings_one_country(
     session: aiohttp.ClientSession,
     country_code: str,
     data_url: str,
-    output_dir: Path,
+    save_path: Path,
     overwrite: bool,
     chunk_size: int = 64 * 1024,
-) -> BuildingsInfo:
+) -> None:
     """
     Perform a single GET request for a given country,
     then save the GeoPackage file.
     """
-    output_dir.mkdir(parents=True, exist_ok=True)
-    safe_code = _safe_name(country_code)
-    save_path = output_dir / f"{safe_code}.gpkg.zip"
+    save_path.parent.mkdir(parents=True, exist_ok=True)
 
     if save_path.exists() and not overwrite:
         logging.debug(f"Skipping {save_path} which already exists.")
+        return
 
-    else:
-        try:
-            async with session.get(data_url) as resp:
-                resp.raise_for_status()
+    try:
+        async with session.get(data_url) as resp:
+            resp.raise_for_status()
 
-                total_bytes = int(resp.headers.get("Content-Length", 0))
+            total_bytes = int(resp.headers.get("Content-Length", 0))
 
-                pbar = tqdm(
-                    total=total_bytes,
-                    unit="B",
-                    unit_scale=True,
-                    desc=f"{safe_code}",
-                    colour="green",
-                )
+            pbar = tqdm(
+                total=total_bytes,
+                unit="B",
+                unit_scale=True,
+                desc=f"{country_code}",
+                colour="green",
+            )
 
-                # Stream the response to disk in binary mode
-                async with aiofiles.open(save_path, mode="wb") as f:
-                    async for chunk in resp.content.iter_chunked(chunk_size):
-                        await f.write(chunk)
-                        pbar.update(len(chunk))
+            # Stream the response to disk in binary mode
+            async with aiofiles.open(save_path, mode="wb") as f:
+                async for chunk in resp.content.iter_chunked(chunk_size):
+                    await f.write(chunk)
+                    pbar.update(len(chunk))
 
-                pbar.close()
+            pbar.close()
 
-        except aiohttp.ClientError as e:
-            raise RuntimeError(f"Failed to download {data_url}: {e}") from e
-
-    return BuildingsInfo(gpkg_zip_path=save_path)
+    except aiohttp.ClientError as e:
+        raise RuntimeError(f"Failed to download {data_url}: {e}") from e
 
 
 async def download_buildings(
     country_codes: List[str], output_dir: Path, overwrite: bool = False
 ) -> dict[str, BuildingsInfo]:
     logging.info(f"Downloading the buildings...")
-    code_to_url = await get_buildings_country_codes_and_urls()
-    code_to_url = {
-        code: url for (code, url) in code_to_url.items() if code in country_codes
+
+    code_to_bdgs_info = {
+        country_code: BuildingsInfo(
+            gpkg_zip_path=output_dir / f"{country_code}.gpkg.zip"
+        )
+        for country_code in country_codes
     }
+    country_codes_to_download: List[str] = []
+    if overwrite:
+        country_codes_to_download = country_codes
+    else:
+        for country_code, bdgs_info in code_to_bdgs_info.items():
+            if not bdgs_info.gpkg_zip_path.exists():
+                country_codes_to_download.append(country_code)
+
+    if len(country_codes_to_download) == 0:
+        logging.info(f"All buildings files were already downloaded.")
+        return code_to_bdgs_info
+
+    code_to_url = await get_buildings_country_codes_and_urls()
 
     logging.info(f"Downloading the buildings...")
     download_timeout = aiohttp.ClientTimeout(total=None, sock_connect=10, sock_read=300)
     async with aiohttp.ClientSession(timeout=download_timeout) as session:
-        save_paths = await asyncio.gather(
+        await asyncio.gather(
             *(
                 download_buildings_one_country(
-                    session, code, url, output_dir, overwrite=overwrite
+                    session,
+                    code,
+                    code_to_url[code],
+                    code_to_bdgs_info[code].gpkg_zip_path,
+                    overwrite=overwrite,
                 )
-                for (code, url) in code_to_url.items()
+                for code in country_codes_to_download
             )
         )
 
     logging.info(f"Done downloading the buildings.")
-    return dict(zip(code_to_url.keys(), save_paths))
+    return code_to_bdgs_info
 
 
 # ----------------------------------------------------------------------
@@ -427,34 +444,84 @@ def get_layers_from_gpkg(gpkg_path: Path) -> list[str]:
     Return a list of layer names in the GeoPackage by parsing ogrinfo output.
     Assumes lines like: '1: layer_name (Point)'.
     """
-    cmd = ["ogrinfo", "-ro", str(gpkg_path)]
-    proc = _run_cmd(cmd)
-    layers = []
-    for line in proc.stdout.splitlines():
-        line = line.strip()
-        # Match "1: layername (..."
-        if ":" in line:
-            parts = line.split(":", 1)
-            idx = parts[0].strip()
-            # Ensure first part is an integer index
-            if idx.isdigit():
-                rest = parts[1].strip()
-                if rest:
-                    # layer name is first token, may be quoted
-                    name = rest.split()[0].strip('"')
-                    layers.append(name)
-    logging.info(f"Found these layers in {gpkg_path}: {layers}.")
+    # cmd = ["ogrinfo", "-ro", str(gpkg_path)]
+    # proc = _run_cmd(cmd)
+    # layers = []
+    # for line in proc.stdout.splitlines():
+    #     line = line.strip()
+    #     # Match "1: layername (..."
+    #     if ":" in line:
+    #         parts = line.split(":", 1)
+    #         idx = parts[0].strip()
+    #         # Ensure first part is an integer index
+    #         if idx.isdigit():
+    #             rest = parts[1].strip()
+    #             if rest:
+    #                 # layer name is first token, may be quoted
+    #                 name = rest.split()[0].strip('"')
+    #                 layers.append(name)
+
+    ds = gdal.OpenEx(str(gpkg_path), gdal.OF_VECTOR)
+    layers = [ds.GetLayer(i).GetName() for i in range(ds.GetLayerCount())]
+    ds = None
+
     return layers
 
 
-def build_union_sql(layers: List[str]) -> List[str]:
+def merge_gpkg_layers(gpkg_path: Path):
+    # gdal.DontUseExceptions()
+    print(f"{gpkg_path = }")
+    ds = gdal.OpenEx(str(gpkg_path), gdal.OF_VECTOR)
+    layers = [ds.GetLayer(i).GetName() for i in range(ds.GetLayerCount())]
+    ds = None
+
+    if len(layers) == 1:
+        return
+
+    union_sql = f"SELECT * FROM '{layers[0]}' UNION ALL " + " UNION ALL ".join(
+        f"SELECT * FROM '{name}'" for name in layers[1:]
+    )
+
+    # Temp output → atomic replace
+    temp_path = gpkg_path.parent / f"{gpkg_path.name}.tmp"
+    print(f"{temp_path = }")
+
+    try:
+        logging.info(f"Merging layers in {gpkg_path}...")
+        final_layer = gpkg_path.stem
+        gdal.VectorTranslate(
+            str(temp_path),
+            str(gpkg_path),
+            options=gdal.VectorTranslateOptions(
+                accessMode="overwrite",
+                format="GPKG",
+                SQLDialect="SQLite",
+                SQLStatement=union_sql,
+                layerName=final_layer,
+            ),
+        )
+
+        # Atomic replace
+        gpkg_path.unlink()
+        temp_path.rename(gpkg_path)
+        logging.info(f"Done merging layers in {gpkg_path}.")
+        return
+
+    except Exception as e:
+        if temp_path.exists():
+            temp_path.unlink()
+        raise RuntimeError(f"Merge failed: {e}")
+
+
+def build_union_sql(layers: List[str]) -> str | None:
     """
     Build a SQLite UNION ALL SQL over all layers: SELECT * FROM l1 UNION ALL SELECT * FROM l2 ...
     """
     if len(layers) == 0:
         raise ValueError("No layers given to build UNION SQL")
     elif len(layers) == 1:
-        return []
+        # return []
+        return None
 
     parts = []
     for i, layer in enumerate(layers):
@@ -463,11 +530,15 @@ def build_union_sql(layers: List[str]) -> List[str]:
             parts.append(sel)
         else:
             parts.append("UNION ALL " + sel)
-    return ["-dialect", "SQLite", "-sql", f"{" ".join(parts)}"]
+    # return ["-dialect", "SQLite", "-sql", f"{" ".join(parts)}"]
+    return f"{" ".join(parts)}"
 
 
 def convert_one_to_flatgeobuf(
-    buildings_info: BuildingsInfo, output_dir: Path, overwrite: bool
+    buildings_info: BuildingsInfo,
+    output_dir: Path,
+    overwrite: bool,
+    position: int | None = None,
 ) -> Tuple[Path, bool]:
     """
     Convert a single <country_code>.gpkg → <country_code>.fgb using ogr2ogr.
@@ -483,21 +554,57 @@ def convert_one_to_flatgeobuf(
         return save_path, True
 
     gpkg_layers = get_layers_from_gpkg(input_path)
-    union_arguments = build_union_sql(gpkg_layers)
+    union_sql = build_union_sql(gpkg_layers)
+    # merge_gpkg_layers(gpkg_path=input_path)
 
     try:
-        translate_cmd = [
-            "ogr2ogr",
-            "-progress",
-            "-f",
-            "FlatGeoBuf",
-            str(save_path),
-            str(input_path),
-            "-t_srs",
-            "EPSG:4326",
-        ]
-        translate_cmd.extend(union_arguments)
-        _run_cmd(translate_cmd)
+        # translate_cmd = [
+        #     "ogr2ogr",
+        #     "-progress",
+        #     "-f",
+        #     "FlatGeoBuf",
+        #     str(save_path),
+        #     str(input_path),
+        #     "-t_srs",
+        #     "EPSG:4326",
+        # ]
+        # translate_cmd.extend(union_arguments)
+        # _run_cmd(translate_cmd)
+
+        # gdal.DontUseExceptions()
+        pbar = tqdm(
+            total=100,
+            unit="%",
+            desc=f"{save_path.stem}",
+            colour="yellow",
+            leave=True,
+            position=position,
+            bar_format="{desc}: {percentage:3.0f}%|{bar}| [{elapsed}<{remaining}, {rate_fmt}{postfix}]",
+        )
+
+        def _callback_func(complete, message, data: tqdm):
+            data.update(complete * 100 - data.n)
+
+        SQLDialect = None if union_sql is None else "SQLite"
+        callback = _callback_func if union_sql is None else None
+        callback_data = pbar if union_sql is None else None
+
+        gdal.VectorTranslate(
+            save_path,
+            input_path,
+            options=gdal.VectorTranslateOptions(
+                format="FlatGeoBuf",
+                dstSRS="EPSG:4326",
+                SQLDialect=SQLDialect,
+                SQLStatement=union_sql,
+                callback=callback,
+                callback_data=callback_data,
+            ),
+        )
+        pbar.n = 100
+        pbar.refresh()
+        pbar.close()
+
         logging.debug(f"Done converting {input_path} to {save_path}.")
 
     except Exception as exc:
@@ -527,15 +634,15 @@ def convert_to_flatgeobufs(
     )
 
     tasks = [
-        (
-            buildings_info,
-            output_dir,
-            overwrite,
-        )
-        for country_code, buildings_info in buildings_infos.items()
+        (buildings_info, output_dir, overwrite, i)
+        for i, (country_code, buildings_info) in enumerate(buildings_infos.items())
     ]
 
-    with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as pool:
+    with concurrent.futures.ProcessPoolExecutor(
+        max_workers=workers,
+        initializer=tqdm.set_lock,
+        initargs=(tqdm.get_lock(),),
+    ) as pool:
         tasks_separated = [
             [tasks[i][j] for i in range(len(tasks))] for j in range(len(tasks[0]))
         ]
@@ -826,7 +933,23 @@ def join_pmtiles_all_countries(
     logging.info("Done joining the PMTiles of all countries together.")
 
 
-def push_pmtiles(local_path: Path, s3_path: str):
+@app.command("push_pmtiles")
+def push_pmtiles(
+    local_path: Annotated[
+        Path,
+        typer.Option(
+            "-l", "--local_path", help="Local path of the file to push.", exists=True
+        ),
+    ],
+    s3_path: Annotated[
+        str,
+        typer.Option(
+            "-s",
+            "--s3_path",
+            help="S3 storage path of the file to push (from the root of the S3 bucket).",
+        ),
+    ],
+):
     logging.info("Pushing the PMTiles to S3 storage...")
     S3_ENDPOINT = "https://fsn1.your-objectstorage.com"
     S3_BUCKET = "eubuccodissemination"
@@ -884,6 +1007,8 @@ def make_pmtiles(
         or (len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else None)
         or 4
     )
+    gdal.DontUseExceptions()
+    gdal.PushErrorHandler("CPLQuietErrorHandler")
 
     with logging_redirect_tqdm():
         # Get all the country codes
