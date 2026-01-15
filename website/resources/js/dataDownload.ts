@@ -63,7 +63,7 @@ async function handleDownload() {
             --SET s3_secret_access_key = '${import.meta.env.VITE_S3_SECRET_KEY}';
         `);
 
-        const sourcePath = 's3://eubuccodissemination/partition-h3_res4/**/*.parquet';
+        const sourcePath = 's3://eubuccodissemination.fsn1.your-objectstorage.com/partition-h3_res4/**/*.parquet';
             
         let query = "";
         let outputFilename = "";
