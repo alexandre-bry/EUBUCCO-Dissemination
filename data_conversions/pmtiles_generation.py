@@ -137,7 +137,7 @@ async def download_admin_one_country_one_level(
     output_dir.mkdir(parents=True, exist_ok=True)
     save_path = output_dir / f"{country_code}-{level}.geojson"
     if save_path.exists() and not overwrite:
-        logging.info(f"Skipping {save_path} which already exists.")
+        logging.debug(f"Skipping {save_path} which already exists.")
 
     else:
         meta_url = (
@@ -271,7 +271,7 @@ async def download_buildings_one_country(
     save_path = output_dir / f"{safe_code}.gpkg.zip"
 
     if save_path.exists() and not overwrite:
-        logging.info(f"Skipping {save_path} which already exists.")
+        logging.debug(f"Skipping {save_path} which already exists.")
 
     else:
         try:
@@ -355,7 +355,7 @@ def unzip_buildings_one_country(
     """
 
     if output_path.exists() and not overwrite:
-        logging.info(
+        logging.debug(
             f"The content of {input_zip_path} has already been extracted into {output_path}. Skipping extraction."
         )
         return output_path
@@ -406,25 +406,23 @@ def unzip_buildings(
         or 4
     )
 
+    # Prepare arguments as tuples in submission order
+    tasks = [
+        (
+            buildings_info.gpkg_zip_path,
+            output_dir / f"{country_code}.gpkg",
+            overwrite,
+        )
+        for country_code, buildings_info in buildings_infos.items()
+    ]
+
     with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as pool:
-        futures: List[concurrent.futures.Future[Path]] = []
+        results = pool.map(unzip_buildings_one_country, tasks)
 
-        for country_code, buildings_info in buildings_infos.items():
-            output_path = output_dir / f"{country_code}.gpkg"
-            futures.append(
-                pool.submit(
-                    unzip_buildings_one_country,
-                    buildings_info.gpkg_zip_path,
-                    output_path,
-                    overwrite,
-                )
-            )
-
-        results = [f.result() for f in concurrent.futures.as_completed(futures)]
-
-        # Store the path of FlatGeoBuf
+        # Assign results to BuildingsInfo objects in correct order
         for country_code, result in zip(buildings_infos.keys(), results):
             buildings_infos[country_code].gpkg_path = result
+            logging.debug(f"Set {country_code}.gpkg_path = {result}")
 
     logging.info("Done unzipping all zipped GeoPackage of buildings.")
 
@@ -486,7 +484,7 @@ def convert_one_to_flatgeobuf(
     )
 
     if save_path.exists() and not overwrite:
-        logging.info(f"Skipping {save_path} which already exists.")
+        logging.debug(f"Skipping {save_path} which already exists.")
         return save_path, True
 
     gpkg_layers = get_layers_from_gpkg(input_path)
@@ -532,27 +530,27 @@ def convert_to_flatgeobufs(
         or 4
     )
 
+    tasks = [
+        (
+            buildings_info,
+            output_dir,
+            overwrite,
+        )
+        for country_code, buildings_info in buildings_infos.items()
+    ]
+
     with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as pool:
-        futures: list[concurrent.futures.Future[Tuple[Path, bool]]] = []
+        results = pool.map(convert_one_to_flatgeobuf, tasks)
 
-        for country_code, buildings_info in buildings_infos.items():
-            futures.append(
-                pool.submit(
-                    convert_one_to_flatgeobuf,
-                    buildings_info,
-                    output_dir,
-                    overwrite,
-                )
-            )
-
-        results = [f.result() for f in concurrent.futures.as_completed(futures)]
-
-        # Store the path of FlatGeoBuf
+        # Assign results to BuildingsInfo objects in correct order
         for country_code, result in zip(buildings_infos.keys(), results):
             buildings_infos[country_code].fgb_path = result[0]
+            logging.debug(
+                f"Converted {buildings_infos[country_code].gpkg_path} to {buildings_infos[country_code].fgb_path}."
+            )
 
     logging.info("Done converting all GeoPackage to FlatGeoBuf.")
-    return results
+    return list(results)
 
 
 def convert_one_to_pmtiles(
@@ -573,7 +571,7 @@ def convert_one_to_pmtiles(
     )
 
     if save_path.exists() and not overwrite:
-        logging.info(f"Skipping {save_path} which already exists.")
+        logging.debug(f"Skipping {save_path} which already exists.")
 
     else:
         try:
@@ -626,81 +624,163 @@ def convert_to_pmtiles(
     )
     logging.info(f"Using {workers} workers.")
 
-    with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as pool:
-        futures: list[concurrent.futures.Future[Tuple[Path, bool]]] = []
-        futures_info: list[tuple[str, str]] = []  # info the gather results properly
-        for country_code, country_infos in countries_infos.items():
-            bdgs_info = country_infos.bdgs_info
-            country_admin_info = country_infos.admin_info
+    # with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as pool:
+    #     futures: list[concurrent.futures.Future[Tuple[Path, bool]]] = []
+    #     futures_info: list[tuple[str, str]] = []  # info to gather results properly
+    #     for country_code, country_infos in countries_infos.items():
+    #         bdgs_info = country_infos.bdgs_info
+    #         country_admin_info = country_infos.admin_info
 
-            start_zooms: List[int] = [0]
+    #         start_zooms: List[int] = [0]
 
-            # Administrative boundaries
-            # Compute the optimal min zoom for each admin level
-            for admin_level in ADMIN_LEVELS[1:]:
+    #         # Administrative boundaries
+    #         # Compute the optimal min zoom for each admin level
+    #         for admin_level in ADMIN_LEVELS[1:]:
 
-                admin_info = country_admin_info.levels[admin_level]
-                start_zoom = math.ceil(
-                    BASE_ZOOM_VALUE - 0.5 * math.log2(admin_info.mean_area)
-                )
-                # Make sure the start zoom is higher that the previous one
-                if start_zoom <= start_zooms[-1]:
-                    start_zoom = start_zooms[-1] + 1
-                start_zooms.append(start_zoom)
+    #             admin_info = country_admin_info.levels[admin_level]
+    #             start_zoom = math.ceil(
+    #                 BASE_ZOOM_VALUE - 0.5 * math.log2(admin_info.mean_area)
+    #             )
+    #             # Make sure the start zoom is higher that the previous one
+    #             if start_zoom <= start_zooms[-1]:
+    #                 start_zoom = start_zooms[-1] + 1
+    #             start_zooms.append(start_zoom)
 
-            # Keep only the levels that fit before the building zoom
-            zooms: List[Tuple[int, int]] = []
-            for i in range(len(start_zooms)):
-                min_zoom = start_zooms[i]
-                if i + 1 < len(start_zooms):
-                    max_zoom = min(BUILDINGS_ZOOM - 1, start_zooms[i + 1])
-                else:
-                    max_zoom = BUILDINGS_ZOOM - 1
-                if min_zoom > max_zoom:
-                    break
-                zooms.append((min_zoom, max_zoom))
+    #         # Keep only the levels that fit before the building zoom
+    #         zooms: List[Tuple[int, int]] = []
+    #         for i in range(len(start_zooms)):
+    #             min_zoom = start_zooms[i]
+    #             if i + 1 < len(start_zooms):
+    #                 max_zoom = min(BUILDINGS_ZOOM - 1, start_zooms[i + 1])
+    #             else:
+    #                 max_zoom = BUILDINGS_ZOOM - 1
+    #             if min_zoom > max_zoom:
+    #                 break
+    #             zooms.append((min_zoom, max_zoom))
 
-            for i, (min_zoom, max_zoom) in enumerate(zooms):
-                admin_level = ADMIN_LEVELS[i]
-                admin_info = country_admin_info.levels[admin_level]
-                futures.append(
-                    pool.submit(
-                        convert_one_to_pmtiles,
-                        admin_info.geojson_path,
-                        min_zoom,
-                        max_zoom,
-                        output_dir,
-                        admin_level,
-                        overwrite,
-                    )
-                )
-                futures_info.append((country_code, admin_level))
+    #         for i, (min_zoom, max_zoom) in enumerate(zooms):
+    #             admin_level = ADMIN_LEVELS[i]
+    #             admin_info = country_admin_info.levels[admin_level]
+    #             futures.append(
+    #                 pool.submit(
+    #                     convert_one_to_pmtiles,
+    #                     admin_info.geojson_path,
+    #                     min_zoom,
+    #                     max_zoom,
+    #                     output_dir,
+    #                     admin_level,
+    #                     overwrite,
+    #                 )
+    #             )
+    #             futures_info.append((country_code, admin_level))
 
-            # Buildings
-            min_zoom = zooms[-1][1] + 1
-            if min_zoom != BUILDINGS_ZOOM:
-                raise RuntimeError(
-                    f"The zoom assigned to buildings ({min_zoom}) is different from the expected BUILDINGS_ZOOM ({BUILDINGS_ZOOM})."
-                )
-            futures.append(
-                pool.submit(
-                    convert_one_to_pmtiles,
-                    bdgs_info.get_fgb_path(),
+    #         # Buildings
+    #         min_zoom = zooms[-1][1] + 1
+    #         if min_zoom != BUILDINGS_ZOOM:
+    #             raise RuntimeError(
+    #                 f"The zoom assigned to buildings ({min_zoom}) is different from the expected BUILDINGS_ZOOM ({BUILDINGS_ZOOM})."
+    #             )
+    #         futures.append(
+    #             pool.submit(
+    #                 convert_one_to_pmtiles,
+    #                 bdgs_info.get_fgb_path(),
+    #                 min_zoom,
+    #                 MAX_ZOOM,
+    #                 output_dir,
+    #                 BUILDINGS_LAYER,
+    #                 overwrite,
+    #             )
+    #         )
+    #         futures_info.append((country_code, BUILDINGS_LAYER))
+
+    #     results: List[Tuple[Path, bool]] = []
+    #     for fut, (country_code, layer) in zip(
+    #         concurrent.futures.as_completed(futures), futures_info
+    #     ):
+    #         pmtiles_path, ok = fut.result()
+    #         results.append((pmtiles_path, ok))
+
+    #         # Find the originating object and store the path
+    #         if layer in ADMIN_LEVELS:
+    #             countries_infos[country_code].admin_info.levels[
+    #                 layer
+    #             ].pmtiles_path = pmtiles_path
+    #         elif layer == "buildings":
+    #             countries_infos[country_code].bdgs_info.pmtiles_path = pmtiles_path
+
+    tasks = []
+    tasks_info: list[tuple[str, str]] = []  # info to gather results properly
+
+    for country_code, country_infos in countries_infos.items():
+        bdgs_info = country_infos.bdgs_info
+        country_admin_info = country_infos.admin_info
+
+        start_zooms: List[int] = [0]
+
+        # Administrative boundaries
+        # Compute the optimal min zoom for each admin level
+        for admin_level in ADMIN_LEVELS[1:]:
+
+            admin_info = country_admin_info.levels[admin_level]
+            start_zoom = math.ceil(
+                BASE_ZOOM_VALUE - 0.5 * math.log2(admin_info.mean_area)
+            )
+            # Make sure the start zoom is higher that the previous one
+            if start_zoom <= start_zooms[-1]:
+                start_zoom = start_zooms[-1] + 1
+            start_zooms.append(start_zoom)
+
+        # Keep only the levels that fit before the building zoom
+        zooms: List[Tuple[int, int]] = []
+        for i in range(len(start_zooms)):
+            min_zoom = start_zooms[i]
+            if i + 1 < len(start_zooms):
+                max_zoom = min(BUILDINGS_ZOOM - 1, start_zooms[i + 1])
+            else:
+                max_zoom = BUILDINGS_ZOOM - 1
+            if min_zoom > max_zoom:
+                break
+            zooms.append((min_zoom, max_zoom))
+
+        for i, (min_zoom, max_zoom) in enumerate(zooms):
+            admin_level = ADMIN_LEVELS[i]
+            admin_info = country_admin_info.levels[admin_level]
+            tasks.append(
+                (
+                    admin_info.geojson_path,
                     min_zoom,
-                    MAX_ZOOM,
+                    max_zoom,
                     output_dir,
-                    BUILDINGS_LAYER,
+                    admin_level,
                     overwrite,
                 )
             )
-            futures_info.append((country_code, BUILDINGS_LAYER))
+            tasks_info.append((country_code, admin_level))
 
-        results: List[Tuple[Path, bool]] = []
-        for fut, (country_code, layer) in zip(
-            concurrent.futures.as_completed(futures), futures_info
-        ):
-            pmtiles_path, ok = fut.result()
-            results.append((pmtiles_path, ok))
+        # Buildings
+        min_zoom = zooms[-1][1] + 1
+        if min_zoom != BUILDINGS_ZOOM:
+            raise RuntimeError(
+                f"The zoom assigned to buildings ({min_zoom}) is different from the expected BUILDINGS_ZOOM ({BUILDINGS_ZOOM})."
+            )
+        tasks.append(
+            (
+                bdgs_info.get_fgb_path(),
+                min_zoom,
+                MAX_ZOOM,
+                output_dir,
+                BUILDINGS_LAYER,
+                overwrite,
+            )
+        )
+        tasks_info.append((country_code, BUILDINGS_LAYER))
+
+    with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as pool:
+        results = pool.map(convert_one_to_pmtiles, tasks)
+
+        # Assign results to BuildingsInfo objects in correct order
+        for (country_code, layer), result in zip(tasks_info, results):
+            pmtiles_path, ok = result
 
             # Find the originating object and store the path
             if layer in ADMIN_LEVELS:
@@ -711,7 +791,7 @@ def convert_to_pmtiles(
                 countries_infos[country_code].bdgs_info.pmtiles_path = pmtiles_path
 
     logging.info("Done converting all FlatGeoBuf to PMTiles.")
-    return results
+    return list(results)
 
 
 def join_one_pmtiles(
@@ -720,7 +800,7 @@ def join_one_pmtiles(
     overwrite: bool,
 ) -> Tuple[Path, bool]:
     if save_path.exists() and not overwrite:
-        logging.info(f"Skipping {save_path} which already exists.")
+        logging.debug(f"Skipping {save_path} which already exists.")
 
     else:
         try:
@@ -757,45 +837,79 @@ def join_pmtiles_per_country(
     )
     logging.info(f"Using {workers} workers.")
 
-    with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as pool:
-        futures: list[concurrent.futures.Future[Tuple[Path, bool]]] = []
-        futures_info: list[str] = []  # info the gather results properly
-        for country_code, country_infos in countries_infos.items():
-            bdgs_info = country_infos.bdgs_info
-            country_admin_info = country_infos.admin_info
+    # with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as pool:
+    #     futures: list[concurrent.futures.Future[Tuple[Path, bool]]] = []
+    #     futures_info: list[str] = []  # info the gather results properly
+    #     for country_code, country_infos in countries_infos.items():
+    #         bdgs_info = country_infos.bdgs_info
+    #         country_admin_info = country_infos.admin_info
 
-            input_paths: List[Path] = []
-            input_paths.append(bdgs_info.get_pmtiles_path())
-            # Administrative boundaries
-            for admin_level in ADMIN_LEVELS:
-                admin_info = country_admin_info.levels[admin_level]
+    #         input_paths: List[Path] = []
+    #         input_paths.append(bdgs_info.get_pmtiles_path())
+    #         # Administrative boundaries
+    #         for admin_level in ADMIN_LEVELS:
+    #             admin_info = country_admin_info.levels[admin_level]
 
-                # Ignore the administrative levels that were skipped
-                if admin_info.pmtiles_path is None:
-                    continue
-                input_paths.append(admin_info.get_pmtiles_path())
+    #             # Ignore the administrative levels that were skipped
+    #             if admin_info.pmtiles_path is None:
+    #                 continue
+    #             input_paths.append(admin_info.get_pmtiles_path())
 
-            save_path = output_dir / f"{country_code}.pmtiles"
-            futures.append(
-                pool.submit(
-                    join_one_pmtiles,
-                    input_paths,
-                    save_path,
-                    overwrite,
-                )
+    #         save_path = output_dir / f"{country_code}.pmtiles"
+    #         futures.append(
+    #             pool.submit(
+    #                 join_one_pmtiles,
+    #                 input_paths,
+    #                 save_path,
+    #                 overwrite,
+    #             )
+    #         )
+    #         futures_info.append(country_code)
+
+    #     results: List[Tuple[Path, bool]] = []
+    #     for fut, country_code in zip(
+    #         concurrent.futures.as_completed(futures), futures_info
+    #     ):
+    #         pmtiles_path, ok = fut.result()
+    #         results.append((pmtiles_path, ok))
+    #         countries_infos[country_code].pmtiles_path = pmtiles_path
+
+    tasks: List[Tuple[List[Path], Path, bool]] = []
+
+    for country_code, country_infos in countries_infos.items():
+        bdgs_info = country_infos.bdgs_info
+        country_admin_info = country_infos.admin_info
+
+        input_paths: List[Path] = []
+        input_paths.append(bdgs_info.get_pmtiles_path())
+        # Administrative boundaries
+        for admin_level in ADMIN_LEVELS:
+            admin_info = country_admin_info.levels[admin_level]
+
+            # Ignore the administrative levels that were skipped
+            if admin_info.pmtiles_path is None:
+                continue
+            input_paths.append(admin_info.get_pmtiles_path())
+
+        save_path = output_dir / f"{country_code}.pmtiles"
+        tasks.append(
+            (
+                input_paths,
+                save_path,
+                overwrite,
             )
-            futures_info.append(country_code)
+        )
 
-        results: List[Tuple[Path, bool]] = []
-        for fut, country_code in zip(
-            concurrent.futures.as_completed(futures), futures_info
-        ):
-            pmtiles_path, ok = fut.result()
-            results.append((pmtiles_path, ok))
+    with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as pool:
+        results = pool.map(join_one_pmtiles, tasks)
+
+        # Assign results to BuildingsInfo objects in correct order
+        for country_code, result in zip(countries_infos.keys(), results):
+            pmtiles_path, ok = result
             countries_infos[country_code].pmtiles_path = pmtiles_path
 
     logging.info("Done joining all PMTiles per country.")
-    return results
+    return list(results)
 
 
 def join_pmtiles_all_countries(
@@ -803,7 +917,7 @@ def join_pmtiles_all_countries(
 ):
     logging.info("Joining the PMTiles of all countries together...")
     if save_path.exists() and not overwrite:
-        logging.info(f"Skipping {save_path} which already exists.")
+        logging.debug(f"Skipping {save_path} which already exists.")
 
     else:
         try:
