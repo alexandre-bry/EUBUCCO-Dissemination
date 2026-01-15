@@ -101,13 +101,14 @@ def partition_parquet_to_h3(
             #logging.debug(f"Set {country_code}.gpkg_path = {result}")
 
 
-    print(list(results))
+    #print(list(results))
     logging.info("Done converting gpkg to parquet")
 
 def partition_parquet_to_h3_one_country(INPUT_PATH : Path,
                                         OUTPUT_PATH : Path,
                                         resolution : int):
 
+    print(f"Reading {INPUT_PATH}")
     # Hilbert-order, h3, partition
     __ = gpio.read(INPUT_PATH) \
         .add_bbox() \
@@ -117,12 +118,13 @@ def partition_parquet_to_h3_one_country(INPUT_PATH : Path,
     print(f"Partitioned {INPUT_PATH} at: {OUTPUT_PATH}")
 
 if __name__ == "__main__":
-    DATA_DIR = Path("..", "data") # Home data mount
-    IN_DIR = DATA_DIR / "gpkg" # Folder with all gpkg
-    #OUT_DIR = DATA_DIR / "partition" / "country" # One partition location
-
-    IN_DIR = Path("..", "data", "partition", "country")
-    OUT_DIR = DATA_DIR / "partition" / "parquet_h3_res4"
-
+    data_mount = Path("..", "data")
+    gpkg_dir = data_mount / "gpkg"
+    parquet_dir = data_mount / Path("partition", "country")
+    h3_dir = data_mount / Path("partition", "parquet_h3_res4")
     #partition_gpkg_to_parquet(IN_DIR, OUT_DIR)
-    partition_parquet_to_h3(IN_DIR, OUT_DIR)
+  
+
+    #partition_parquet_to_h3(parquet_dir, h3_dir)
+
+    partition_gpkg_to_parquet_one_country(parquet_dir / "CYP.parquet", h3_dir)
