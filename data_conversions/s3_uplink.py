@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 from botocore.exceptions import ClientError, EndpointConnectionError
 from dotenv import dotenv_values
+import argparse
 
 # --- CONFIG --- #
 BUCKET_NAME = 'eubuccodissemination'
@@ -10,7 +11,6 @@ S3_ENDPOINT = "https://fsn1.your-objectstorage.com"
 # S3_ENDPOINT = "https://fsn1.your-objectstorage.com"
 
 config = dotenv_values(".env")
-print(config)
 
 client = boto3.client(
     "s3",
@@ -18,9 +18,6 @@ client = boto3.client(
     aws_access_key_id=config['ACCESS_KEY'],
     aws_secret_access_key=config['SECRET_KEY'],
 )
-
-def create_bucket(bucket_name : str):
-    client.create_bucket(Bucket = bucket_name)
 
 def upload_folder_to_s3(
     local_folder: str,
@@ -50,12 +47,38 @@ def upload_folder_to_s3(
 
             try:
                 client.upload_file(local_path, bucket_name, s3_key)
-                print(f"Uploaded: {s3_key}")
+                print(f"Uploaded: {s3_key} to {s3_prefix}")
             except (ClientError, EndpointConnectionError) as e:
                 print(f"Failed to upload {local_path}: {e}")
 
+def cli():
+    parser = argparse.ArgumentParser(
+        description="Upload a local folder to S3 preserving directory structure"
+    )
+
+    parser.add_argument(
+        "local_folder",
+        type=Path,
+        help="Local folder to upload",
+    )
+
+    parser.add_argument(
+        "s3_prefix",
+        type=str,
+        help="S3 prefix (folder) inside the bucket",
+    )
+
+    args = parser.parse_args()
+
+    upload_folder_to_s3(
+        local_folder=args.local_folder,
+        bucket_name=BUCKET_NAME,
+        s3_prefix=args.s3_prefix,
+    )
+
 if __name__ == '__main__':
-    path_to_pq = Path("..", "data", "partition", "parquet_h3_res4")
+    cli()
+    #path_to_pq = Path("..", "data", "partition", "parquet_h3_res4")
     """
     upload_folder_to_s3(local_folder= path_to_pq,
                         bucket_name= BUCKET_NAME,
@@ -63,6 +86,6 @@ if __name__ == '__main__':
                         )
     """
 
-    upload_folder_to_s3(local_folder= Path("..", "data", "parquet"),
-                        bucket_name= BUCKET_NAME,
-                        s3_prefix = "partition-country")
+    #upload_folder_to_s3(local_folder= Path("..", "data", "parquet"),
+    #                    bucket_name= BUCKET_NAME,
+    #                    s3_prefix = "partition-country")
