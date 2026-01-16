@@ -858,9 +858,9 @@ def convert_to_pmtiles(
     tasks = [
         (
             admin_paths,
+            output_dir / "admin.pmtiles",
             0,
             BUILDINGS_ZOOM - 1,
-            output_dir / "admin.pmtiles",
             "ADM0",
             overwrite,
             "Admin",
@@ -868,9 +868,9 @@ def convert_to_pmtiles(
         ),
         (
             bdgs_paths,
+            output_dir / "buildings.pmtiles",
             BUILDINGS_ZOOM,
             MAX_ZOOM,
-            output_dir / "buildings.pmtiles",
             BUILDINGS_LAYER,
             overwrite,
             "Buildings",
