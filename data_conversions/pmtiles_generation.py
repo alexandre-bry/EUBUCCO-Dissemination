@@ -4,8 +4,11 @@ import json
 import logging
 import math
 import os
+import re
+import select
 import subprocess
 import tempfile
+import threading
 import zipfile
 from enum import Enum
 from pathlib import Path
@@ -641,6 +644,69 @@ def convert_to_flatgeobufs(
     return list(results)
 
 
+def _run_cmd_with_progress(
+    cmd: list[str], desc: str = "tippecanoe", position: int | None = None
+) -> subprocess.CompletedProcess:
+    """Run tippecanoe with live tqdm progress from stderr."""
+    logging.info(" ".join(cmd))
+
+    p = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        bufsize=0,  # Line buffering
+        universal_newlines=True,
+    )
+
+    progress_re = re.compile(r"(\d+(?:\.\d+)?)%\s+\d+/\d+/\d+")  # "27.7% 5/19/12"
+    pbar = tqdm(
+        total=100,
+        unit="%",
+        desc=desc,
+        colour="blue",
+        leave=True,
+        position=position,
+    )
+
+    stdout_out, stderr_out = [], []
+
+    while p.poll() is None:
+        ready_r, _, _ = select.select([p.stdout, p.stderr], [], [], 0.1)
+
+        for stream in ready_r:
+            line = stream.readline()
+            if not line:
+                continue
+
+            if stream == p.stderr:
+                match = progress_re.search(line)
+                if match:
+                    pct = float(match.group(1))
+                    pbar.n = min(pct, 100)
+                    pbar.refresh()
+                else:
+                    stderr_out.append(line)
+            else:
+                stdout_out.append(line)
+
+    # Drain remaining output
+    stdout_out.extend(p.stdout.readlines())
+    stderr_out.extend(p.stderr.readlines())
+
+    pbar.close()
+    stdout = "".join(stdout_out)
+    stderr = "".join(stderr_out)
+
+    if p.returncode != 0:
+        raise RuntimeError(
+            f"Command {' '.join(cmd)} failed (code {p.returncode})\n"
+            f"stdout: {stdout}\nstderr: {''.join(stderr_out)}"
+        )
+
+    return subprocess.CompletedProcess(p.args, p.returncode, stdout, stderr)
+
+
 def convert_one_to_pmtiles(
     input_path: Path,
     min_zoom: int,
@@ -648,15 +714,15 @@ def convert_one_to_pmtiles(
     output_dir: Path,
     layer: str,
     overwrite: bool,
+    pbar_desc: str,
+    position: int,
 ) -> Tuple[Path, bool]:
     """
     Convert a single <country>.fgb → <country>.pmtiles using the gdal_translate CLI.
     Returns (output_fgb_path, success_flag).
     """
-    save_path = (
-        output_dir
-        / f"{str(input_path.name).removesuffix("".join(input_path.suffixes))}.pmtiles"
-    )
+    country_code = str(input_path.name).removesuffix("".join(input_path.suffixes))
+    save_path = output_dir / f"{country_code}.pmtiles"
 
     if save_path.exists() and not overwrite:
         logging.debug(f"Skipping {save_path} which already exists.")
@@ -686,7 +752,7 @@ def convert_one_to_pmtiles(
 
         if max_zoom == "g":
             translate_cmd.append("--extend-zooms-if-still-dropping")
-        _run_cmd(translate_cmd)
+        _run_cmd_with_progress(translate_cmd, desc=pbar_desc, position=position)
         logging.debug(f"Done converting {input_path} to {save_path}.")
 
     except Exception as exc:
@@ -762,6 +828,8 @@ def convert_to_pmtiles(
                     output_dir,
                     admin_level,
                     overwrite,
+                    f"Admin {country_code}",
+                    len(tasks),
                 )
             )
             tasks_info.append((country_code, admin_level))
@@ -780,11 +848,17 @@ def convert_to_pmtiles(
                 output_dir,
                 BUILDINGS_LAYER,
                 overwrite,
+                f"Buildings {country_code}",
+                len(tasks),
             )
         )
         tasks_info.append((country_code, BUILDINGS_LAYER))
 
-    with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as pool:
+    with concurrent.futures.ProcessPoolExecutor(
+        max_workers=workers,
+        initializer=tqdm.set_lock,
+        initargs=(tqdm.get_lock(),),
+    ) as pool:
         tasks_separated = [
             [tasks[i][j] for i in range(len(tasks))] for j in range(len(tasks[0]))
         ]
@@ -908,7 +982,7 @@ def join_pmtiles_all_countries(
                 "-o",
                 str(save_path),
                 *map(lambda p: str(p.pmtiles_path), countries_infos.values()),
-                "--no-feature-limit",
+                "--no-tile-size-limit",
             ]
 
             _run_cmd(translate_cmd)
