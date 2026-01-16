@@ -54,8 +54,8 @@ for name, path in files:
 
     start_time = time.time()
 
-    if path.endswith(".zip"):
-        continue
+    # if path.endswith(".zip"):
+    #     continue
 
     if path.endswith(".gpkg"):
         con.sql(f"SELECT count(*) FROM ST_Read('{path}')").fetchall()
@@ -78,8 +78,8 @@ for name, path in files:
     if not os.path.exists(path):
         continue
 
-    if path.endswith(".zip"):
-        continue
+    # if path.endswith(".zip"):
+    #     continue
 
     if path.endswith(".gpkg"):
         columns = con.sql(f"DESCRIBE SELECT * FROM ST_Read('{path}')").df()['column_name'].tolist()
@@ -132,8 +132,8 @@ for name, path in files:
     if not os.path.exists(path): 
         continue
 
-    if path.endswith(".zip"):
-        continue
+    # if path.endswith(".zip"):
+    #     continue
 
     start_time = time.time()
 
@@ -150,8 +150,8 @@ for name, path in files:
     if not os.path.exists(path): 
         continue
 
-    if path.endswith(".zip"):
-        continue
+    # if path.endswith(".zip"):
+    #     continue
 
     start_time = time.time()
 
@@ -208,8 +208,8 @@ for name, path in files:
     if not os.path.exists(path):
         continue
 
-    if path.endswith(".zip"):
-        continue
+    # if path.endswith(".zip"):
+    #     continue
 
     if path.endswith(".gpkg"):
         columns = con.sql(f"DESCRIBE SELECT * FROM ST_Read('{path}')").df()['column_name'].tolist()
