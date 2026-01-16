@@ -1,6 +1,5 @@
 import asyncio
 import concurrent.futures
-import json
 import logging
 import math
 import os
@@ -8,7 +7,6 @@ import re
 import select
 import subprocess
 import tempfile
-import threading
 import zipfile
 from enum import Enum
 from pathlib import Path
@@ -20,7 +18,6 @@ import aiohttp
 import boto3
 import geopandas as gpd
 import typer
-from botocore.exceptions import ClientError, EndpointConnectionError
 from dotenv import dotenv_values
 from osgeo import gdal
 from pydantic import BaseModel
@@ -30,7 +27,7 @@ from tqdm.contrib.logging import logging_redirect_tqdm
 app = typer.Typer()
 
 
-ADMIN_LEVELS = ["ADM0", "ADM1", "ADM2"]
+ADMIN_LEVELS = ["ADM0"]
 BASE_ZOOM_VALUE = 0.5 * math.log2(20000000) + 9
 BUILDINGS_LAYER = "buildings"
 BUILDINGS_ZOOM = 4
@@ -707,11 +704,11 @@ def _run_cmd_with_progress(
     return subprocess.CompletedProcess(p.args, p.returncode, stdout, stderr)
 
 
-def convert_one_to_pmtiles(
-    input_path: Path,
+def convert_files_to_one_pmtiles(
+    input_paths: List[Path],
+    save_path: Path,
     min_zoom: int,
     max_zoom: int | Literal["g"],
-    output_dir: Path,
     layer: str,
     overwrite: bool,
     pbar_desc: str,
@@ -721,43 +718,37 @@ def convert_one_to_pmtiles(
     Convert a single <country>.fgb → <country>.pmtiles using the gdal_translate CLI.
     Returns (output_fgb_path, success_flag).
     """
-    country_code = str(input_path.name).removesuffix("".join(input_path.suffixes))
-    save_path = output_dir / f"{country_code}.pmtiles"
-
     if save_path.exists() and not overwrite:
         logging.debug(f"Skipping {save_path} which already exists.")
         return save_path, True
 
-    try:
-        translate_cmd = [
-            "tippecanoe",
-            f"-Z{min_zoom}",
-            f"-z{max_zoom}",
-            "-o",
-            str(save_path),
-            "-l",
-            layer,
-            "--coalesce-densest-as-needed",
-            # "--drop-densest-as-needed",
-            "--include=height",
-            "--include=age",
-            "--include=type",
-            "--coalesce",
-            "--reorder",
-            "--no-feature-limit",
-            "--no-tile-size-limit",
-            # f"-M {1_000_000}",
-            str(input_path),
-        ]
+    input_paths_str = list(map(lambda p: str(p), input_paths))
 
-        if max_zoom == "g":
-            translate_cmd.append("--extend-zooms-if-still-dropping")
-        _run_cmd_with_progress(translate_cmd, desc=pbar_desc, position=position)
-        logging.debug(f"Done converting {input_path} to {save_path}.")
+    translate_cmd = [
+        "tippecanoe",
+        f"-Z{min_zoom}",
+        f"-z{max_zoom}",
+        "-o",
+        str(save_path),
+        "-l",
+        layer,
+        "--coalesce-densest-as-needed",
+        # "--drop-densest-as-needed",
+        "--include=height",
+        "--include=age",
+        "--include=type",
+        # "--coalesce",
+        # "--reorder",
+        "--no-feature-limit",
+        # "--no-tile-size-limit",
+        f"-M {1_000_000}",
+        *input_paths_str,
+    ]
 
-    except Exception as exc:
-        logging.error(f"{input_path.name} → {exc}")
-        return save_path, False
+    if max_zoom == "g":
+        translate_cmd.append("--extend-zooms-if-still-dropping")
+    _run_cmd_with_progress(translate_cmd, desc=pbar_desc, position=position)
+    logging.debug(f"Done converting {",".join(input_paths_str)} to {save_path}.")
 
     return save_path, True
 
@@ -767,7 +758,7 @@ def convert_to_pmtiles(
     output_dir: Path,
     max_workers: int | None = None,
     overwrite: bool = False,
-) -> List[Tuple[Path, bool]]:
+) -> List[Path]:
     """
     Convert every *.fgb in *fgb_files* to PMTiles using a process pool.
     Returns a list of (output_path, success) tuples.
@@ -783,76 +774,109 @@ def convert_to_pmtiles(
     )
     logging.info(f"Using {workers} workers.")
 
-    tasks = []
-    tasks_info: list[tuple[str, str]] = []  # info to gather results properly
+    # tasks = []
+    # tasks_info: list[tuple[str, str]] = []  # info to gather results properly
+
+    # for country_code, country_infos in countries_infos.items():
+    #     bdgs_info = country_infos.bdgs_info
+    #     country_admin_info = country_infos.admin_info
+
+    #     start_zooms: List[int] = [0]
+
+    #     # Administrative boundaries
+    #     # Compute the optimal min zoom for each admin level
+    #     for admin_level in ADMIN_LEVELS[1:]:
+
+    #         admin_info = country_admin_info.levels[admin_level]
+    #         start_zoom = math.ceil(
+    #             BASE_ZOOM_VALUE - 0.5 * math.log2(admin_info.mean_area)
+    #         )
+    #         # Make sure the start zoom is higher that the previous one
+    #         if start_zoom <= start_zooms[-1]:
+    #             start_zoom = start_zooms[-1] + 1
+    #         start_zooms.append(start_zoom)
+
+    #     # Keep only the levels that fit before the building zoom
+    #     zooms: List[Tuple[int, int]] = []
+    #     for i in range(len(start_zooms)):
+    #         min_zoom = start_zooms[i]
+    #         if i + 1 < len(start_zooms):
+    #             max_zoom = min(BUILDINGS_ZOOM - 1, start_zooms[i + 1])
+    #         else:
+    #             max_zoom = BUILDINGS_ZOOM - 1
+    #         if min_zoom > max_zoom:
+    #             break
+    #         zooms.append((min_zoom, max_zoom))
+
+    #     for i, (min_zoom, max_zoom) in enumerate(zooms):
+    #         admin_level = ADMIN_LEVELS[i]
+    #         admin_info = country_admin_info.levels[admin_level]
+    #         tasks.append(
+    #             (
+    #                 admin_info.geojson_path,
+    #                 min_zoom,
+    #                 max_zoom,
+    #                 output_dir,
+    #                 admin_level,
+    #                 overwrite,
+    #                 f"Admin {country_code}",
+    #                 len(tasks),
+    #             )
+    #         )
+    #         tasks_info.append((country_code, admin_level))
+
+    #     # Buildings
+    #     min_zoom = zooms[-1][1] + 1
+    #     if min_zoom != BUILDINGS_ZOOM:
+    #         raise RuntimeError(
+    #             f"The zoom assigned to buildings ({min_zoom}) is different from the expected BUILDINGS_ZOOM ({BUILDINGS_ZOOM})."
+    #         )
+    #     tasks.append(
+    #         (
+    #             bdgs_info.get_fgb_path(),
+    #             min_zoom,
+    #             MAX_ZOOM,
+    #             output_dir,
+    #             BUILDINGS_LAYER,
+    #             overwrite,
+    #             f"Buildings {country_code}",
+    #             len(tasks),
+    #         )
+    #     )
+    #     tasks_info.append((country_code, BUILDINGS_LAYER))
+
+    admin_paths: List[Path] = []
+    bdgs_paths: List[Path] = []
 
     for country_code, country_infos in countries_infos.items():
         bdgs_info = country_infos.bdgs_info
-        country_admin_info = country_infos.admin_info
+        admin_info = country_infos.admin_info.levels["ADM0"]
 
-        start_zooms: List[int] = [0]
+        admin_paths.append(admin_info.geojson_path)
+        bdgs_paths.append(bdgs_info.get_fgb_path())
 
-        # Administrative boundaries
-        # Compute the optimal min zoom for each admin level
-        for admin_level in ADMIN_LEVELS[1:]:
-
-            admin_info = country_admin_info.levels[admin_level]
-            start_zoom = math.ceil(
-                BASE_ZOOM_VALUE - 0.5 * math.log2(admin_info.mean_area)
-            )
-            # Make sure the start zoom is higher that the previous one
-            if start_zoom <= start_zooms[-1]:
-                start_zoom = start_zooms[-1] + 1
-            start_zooms.append(start_zoom)
-
-        # Keep only the levels that fit before the building zoom
-        zooms: List[Tuple[int, int]] = []
-        for i in range(len(start_zooms)):
-            min_zoom = start_zooms[i]
-            if i + 1 < len(start_zooms):
-                max_zoom = min(BUILDINGS_ZOOM - 1, start_zooms[i + 1])
-            else:
-                max_zoom = BUILDINGS_ZOOM - 1
-            if min_zoom > max_zoom:
-                break
-            zooms.append((min_zoom, max_zoom))
-
-        for i, (min_zoom, max_zoom) in enumerate(zooms):
-            admin_level = ADMIN_LEVELS[i]
-            admin_info = country_admin_info.levels[admin_level]
-            tasks.append(
-                (
-                    admin_info.geojson_path,
-                    min_zoom,
-                    max_zoom,
-                    output_dir,
-                    admin_level,
-                    overwrite,
-                    f"Admin {country_code}",
-                    len(tasks),
-                )
-            )
-            tasks_info.append((country_code, admin_level))
-
-        # Buildings
-        min_zoom = zooms[-1][1] + 1
-        if min_zoom != BUILDINGS_ZOOM:
-            raise RuntimeError(
-                f"The zoom assigned to buildings ({min_zoom}) is different from the expected BUILDINGS_ZOOM ({BUILDINGS_ZOOM})."
-            )
-        tasks.append(
-            (
-                bdgs_info.get_fgb_path(),
-                min_zoom,
-                MAX_ZOOM,
-                output_dir,
-                BUILDINGS_LAYER,
-                overwrite,
-                f"Buildings {country_code}",
-                len(tasks),
-            )
-        )
-        tasks_info.append((country_code, BUILDINGS_LAYER))
+    tasks = [
+        (
+            admin_paths,
+            0,
+            BUILDINGS_ZOOM - 1,
+            output_dir / "admin.pmtiles",
+            "ADM0",
+            overwrite,
+            "Admin",
+            0,
+        ),
+        (
+            bdgs_paths,
+            BUILDINGS_ZOOM,
+            MAX_ZOOM,
+            output_dir / "buildings.pmtiles",
+            BUILDINGS_LAYER,
+            overwrite,
+            "Buildings",
+            1,
+        ),
+    ]
 
     with concurrent.futures.ProcessPoolExecutor(
         max_workers=workers,
@@ -862,22 +886,22 @@ def convert_to_pmtiles(
         tasks_separated = [
             [tasks[i][j] for i in range(len(tasks))] for j in range(len(tasks[0]))
         ]
-        results = pool.map(convert_one_to_pmtiles, *tasks_separated)
+        results = pool.map(convert_files_to_one_pmtiles, *tasks_separated)
 
-        # Assign results to BuildingsInfo objects in correct order
-        for (country_code, layer), result in zip(tasks_info, results):
-            pmtiles_path, ok = result
+        # # Assign results to BuildingsInfo objects in correct order
+        # for (country_code, layer), result in zip(tasks_info, results):
+        #     pmtiles_path, ok = result
 
-            # Find the originating object and store the path
-            if layer in ADMIN_LEVELS:
-                countries_infos[country_code].admin_info.levels[
-                    layer
-                ].pmtiles_path = pmtiles_path
-            elif layer == "buildings":
-                countries_infos[country_code].bdgs_info.pmtiles_path = pmtiles_path
+        #     # Find the originating object and store the path
+        #     if layer in ADMIN_LEVELS:
+        #         countries_infos[country_code].admin_info.levels[
+        #             layer
+        #         ].pmtiles_path = pmtiles_path
+        #     elif layer == "buildings":
+        #         countries_infos[country_code].bdgs_info.pmtiles_path = pmtiles_path
 
     logging.info("Done converting all FlatGeoBuf to PMTiles.")
-    return list(results)
+    return [task[3] for task in tasks]
 
 
 def join_one_pmtiles(
@@ -1055,9 +1079,6 @@ def make_pmtiles(
     max_workers: Annotated[
         int | None, typer.Option("-j", help="Max number of workers to use.")
     ] = None,
-    upload: Annotated[
-        bool, typer.Option("-u", help="Toggle to upload the final PMTiles.")
-    ] = False,
     verbose_int: Annotated[int, typer.Option("--verbose", "-v", count=True)] = 0,
 ):
     setup_logging(verbose=Verbose.from_int(verbose_int))
@@ -1122,34 +1143,38 @@ def make_pmtiles(
             )
 
         # Convert everything to individual PMTiles
-        individual_pmtiles_dir = data_dir / "pmtiles" / "indiv"
-        results = convert_to_pmtiles(
+        # individual_pmtiles_dir = data_dir / "pmtiles" / "indiv"
+        pmtiles_indiv_dir = data_dir / "pmtiles" / "indiv"
+        pmtiles_indiv_paths = convert_to_pmtiles(
             countries_infos=countries_infos,
-            output_dir=individual_pmtiles_dir,
+            output_dir=pmtiles_indiv_dir,
             max_workers=workers,
             overwrite=False,
         )
 
-        # Join everything in each country into one PMTiles
-        country_pmtiles_dir = data_dir / "pmtiles" / "country"
-        results = join_pmtiles_per_country(
-            countries_infos=countries_infos,
-            output_dir=country_pmtiles_dir,
-            max_workers=workers,
-            overwrite=False,
-        )
-
-        # Join the PMTiles of all countries together
-        final_pmtiles_path = data_dir / "pmtiles" / "all_countries.pmtiles"
-        results = join_pmtiles_all_countries(
-            countries_infos=countries_infos,
+        final_pmtiles_path = data_dir / "pmtiles" / "all.pmtiles"
+        join_one_pmtiles(
+            input_paths=pmtiles_indiv_paths,
             save_path=final_pmtiles_path,
             overwrite=False,
         )
 
-        # Push the file to the server
-        if upload:
-            push_pmtiles(local_path=final_pmtiles_path, s3_path="all_countries.pmtiles")
+        # # Join everything in each country into one PMTiles
+        # country_pmtiles_dir = data_dir / "pmtiles" / "country"
+        # results = join_pmtiles_per_country(
+        #     countries_infos=countries_infos,
+        #     output_dir=country_pmtiles_dir,
+        #     max_workers=workers,
+        #     overwrite=False,
+        # )
+
+        # # Join the PMTiles of all countries together
+        # final_pmtiles_path = data_dir / "pmtiles" / "all_countries.pmtiles"
+        # results = join_pmtiles_all_countries(
+        #     countries_infos=countries_infos,
+        #     save_path=final_pmtiles_path,
+        #     overwrite=False,
+        # )
 
 
 if __name__ == "__main__":
