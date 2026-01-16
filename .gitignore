@@ -11,3 +11,4 @@ benchmarking/files/
 .env
 website/.env
 data_conversions/update_cors.py
+.DS_Store
