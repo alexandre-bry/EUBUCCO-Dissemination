@@ -56,14 +56,15 @@ async function handleDownload() {
             SET s3_use_ssl = true;
             
             -- Force Region 
-            --SET s3_region = 'us-east-1';
+            SET s3_region = 'us-east-1';
             
             -- Keys from .env
             --SET s3_access_key_id = '${import.meta.env.VITE_S3_ACCESS_KEY}';
             --SET s3_secret_access_key = '${import.meta.env.VITE_S3_SECRET_KEY}';
         `);
 
-        const sourcePath = 's3://eubuccodissemination.fsn1.your-objectstorage.com/partition-h3_res4/**/*.parquet';
+        // const sourcePath = 's3://eubuccodissemination.fsn1.your-objectstorage.com/partition-h3_res4/**/*.parquet';
+        const sourcePath = 's3://eubuccodissemination.fsn1.your-objectstorage.com/partition-country/**/*parquet';
             
         let query = "";
         let outputFilename = "";
