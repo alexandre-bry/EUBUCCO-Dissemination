@@ -713,14 +713,14 @@ def convert_files_to_one_pmtiles(
     overwrite: bool,
     pbar_desc: str,
     position: int,
-) -> Tuple[Path, bool]:
+) -> Path:
     """
     Convert a single <country>.fgb → <country>.pmtiles using the gdal_translate CLI.
     Returns (output_fgb_path, success_flag).
     """
     if save_path.exists() and not overwrite:
         logging.debug(f"Skipping {save_path} which already exists.")
-        return save_path, True
+        return save_path
 
     input_paths_str = list(map(lambda p: str(p), input_paths))
 
@@ -750,7 +750,7 @@ def convert_files_to_one_pmtiles(
     _run_cmd_with_progress(translate_cmd, desc=pbar_desc, position=position)
     logging.debug(f"Done converting {",".join(input_paths_str)} to {save_path}.")
 
-    return save_path, True
+    return save_path
 
 
 def convert_to_pmtiles(
@@ -878,6 +878,7 @@ def convert_to_pmtiles(
         ),
     ]
 
+    final_paths: List[Path] = []
     with concurrent.futures.ProcessPoolExecutor(
         max_workers=workers,
         initializer=tqdm.set_lock,
@@ -887,6 +888,9 @@ def convert_to_pmtiles(
             [tasks[i][j] for i in range(len(tasks))] for j in range(len(tasks[0]))
         ]
         results = pool.map(convert_files_to_one_pmtiles, *tasks_separated)
+
+        for result in results:
+            final_paths.append(result)
 
         # # Assign results to BuildingsInfo objects in correct order
         # for (country_code, layer), result in zip(tasks_info, results):
@@ -901,7 +905,7 @@ def convert_to_pmtiles(
         #         countries_infos[country_code].bdgs_info.pmtiles_path = pmtiles_path
 
     logging.info("Done converting all FlatGeoBuf to PMTiles.")
-    return [task[3] for task in tasks]
+    return final_paths
 
 
 def join_one_pmtiles(
