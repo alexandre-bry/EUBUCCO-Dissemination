@@ -557,59 +557,41 @@ def convert_one_to_flatgeobuf(
     union_sql = build_union_sql(gpkg_layers)
     # merge_gpkg_layers(gpkg_path=input_path)
 
-    try:
-        # translate_cmd = [
-        #     "ogr2ogr",
-        #     "-progress",
-        #     "-f",
-        #     "FlatGeoBuf",
-        #     str(save_path),
-        #     str(input_path),
-        #     "-t_srs",
-        #     "EPSG:4326",
-        # ]
-        # translate_cmd.extend(union_arguments)
-        # _run_cmd(translate_cmd)
+    pbar = tqdm(
+        total=100,
+        unit="%",
+        desc=f"{save_path.stem}",
+        colour="yellow",
+        leave=True,
+        position=position,
+        bar_format="{desc}: {percentage:3.0f}%|{bar}| [{elapsed}<{remaining}, {rate_fmt}{postfix}]",
+    )
 
-        # gdal.DontUseExceptions()
-        pbar = tqdm(
-            total=100,
-            unit="%",
-            desc=f"{save_path.stem}",
-            colour="yellow",
-            leave=True,
-            position=position,
-            bar_format="{desc}: {percentage:3.0f}%|{bar}| [{elapsed}<{remaining}, {rate_fmt}{postfix}]",
-        )
+    def _callback_func(complete, message, data: tqdm):
+        data.update(complete * 100 - data.n)
 
-        def _callback_func(complete, message, data: tqdm):
-            data.update(complete * 100 - data.n)
+    SQLDialect = None if union_sql is None else "SQLite"
+    callback = _callback_func if union_sql is None else None
+    callback_data = pbar if union_sql is None else None
 
-        SQLDialect = None if union_sql is None else "SQLite"
-        callback = _callback_func if union_sql is None else None
-        callback_data = pbar if union_sql is None else None
+    gdal.VectorTranslate(
+        save_path,
+        input_path,
+        options=gdal.VectorTranslateOptions(
+            format="FlatGeoBuf",
+            dstSRS="EPSG:4326",
+            SQLDialect=SQLDialect,
+            SQLStatement=union_sql,
+            callback=callback,
+            callback_data=callback_data,
+        ),
+    )
+    pbar.n = 100
+    pbar.refresh()
+    pbar.close()
 
-        gdal.VectorTranslate(
-            save_path,
-            input_path,
-            options=gdal.VectorTranslateOptions(
-                format="FlatGeoBuf",
-                dstSRS="EPSG:4326",
-                SQLDialect=SQLDialect,
-                SQLStatement=union_sql,
-                callback=callback,
-                callback_data=callback_data,
-            ),
-        )
-        pbar.n = 100
-        pbar.refresh()
-        pbar.close()
+    logging.debug(f"Done converting {input_path} to {save_path}.")
 
-        logging.debug(f"Done converting {input_path} to {save_path}.")
-
-    except Exception as exc:
-        logging.error(f"{input_path.name} → {exc}")
-        return save_path, False
     return save_path, True
 
 
@@ -694,9 +676,11 @@ def convert_one_to_pmtiles(
             "--include=height",
             "--include=age",
             "--include=type",
+            "--coalesce",
+            "--reorder",
             "--no-feature-limit",
-            "-M",
-            1_000_000,
+            "--no-tile-size-limit",
+            # f"-M {1_000_000}",
             str(input_path),
         ]
 
@@ -837,6 +821,7 @@ def join_one_pmtiles(
                 "-o",
                 str(save_path),
                 *map(lambda p: str(p), input_paths),
+                "--no-tile-size-limit",
             ]
 
             _run_cmd(translate_cmd)
@@ -923,6 +908,7 @@ def join_pmtiles_all_countries(
                 "-o",
                 str(save_path),
                 *map(lambda p: str(p.pmtiles_path), countries_infos.values()),
+                "--no-feature-limit",
             ]
 
             _run_cmd(translate_cmd)
