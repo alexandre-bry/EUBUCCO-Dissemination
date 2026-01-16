@@ -26,7 +26,7 @@ const STYLES = ["Height", "Construction year", "Type"];
 const ADMIN_LEVELS = ["ADM0", "ADM1", "ADM2"];
 
 const LEGEND_DATA: Record<string, { label: string; color: string }[]> = {
-    "Height": [
+    Height: [
         { label: "0m", color: "#ffd044" },
         { label: "10m", color: "#ffb300" },
         { label: "20m", color: "#ff8401" },
@@ -40,11 +40,11 @@ const LEGEND_DATA: Record<string, { label: string; color: string }[]> = {
         { label: "2005", color: "#83cbe3" },
         { label: "2025", color: "#0970be" },
     ],
-    "Type": [
+    Type: [
         { label: "Residential", color: "#003dc1" },
         { label: "Non-residential", color: "#ffb300" },
         { label: "Other", color: "#ddd" },
-    ]
+    ],
 };
 
 class LegendControl {
@@ -67,8 +67,8 @@ class LegendControl {
         if (!data) return;
 
         this._container.innerHTML = `<div class="legend-title">${styleName}</div>`;
-        
-        data.forEach(item => {
+
+        data.forEach((item) => {
             const row = document.createElement("div");
             row.className = "legend-row";
             row.innerHTML = `
@@ -94,7 +94,7 @@ class BuildingsStyleControl {
     constructor(styles: string[], legend: LegendControl) {
         this.styles = styles;
         this.legend = legend;
-        
+
         this._container = document.createElement("div");
         this._container.className = "maplibregl-ctrl attribute-control-panel";
     }
@@ -104,27 +104,27 @@ class BuildingsStyleControl {
 
         const title = document.createElement("div");
         title.className = "panel-title";
-        title.textContent = "Map Layers"; 
+        title.textContent = "Map Layers";
         this._container.appendChild(title);
 
         this.styles.forEach((style) => {
             let button = document.createElement("button");
             button.className = "attribute-button";
-            
+
             if (style === "Height") button.classList.add("active");
-            
+
             button.textContent = style;
             button.addEventListener("click", () => {
                 if (!this._map) return;
 
                 this._map.setGlobalStateProperty("current-style", style);
-                
+
                 this.legend.updateLegend(style);
-                
-                this._container.querySelectorAll('.attribute-button').forEach(btn => 
-                    btn.classList.remove('active')
-                );
-                button.classList.add('active');
+
+                this._container
+                    .querySelectorAll(".attribute-button")
+                    .forEach((btn) => btn.classList.remove("active"));
+                button.classList.add("active");
             });
             this._container.appendChild(button);
         });
@@ -326,11 +326,10 @@ const S3_PATH = import.meta.env.PROD
     : "/api";
 
 map.on("load", () => {
-    const legend = new LegendControl(); 
+    const legend = new LegendControl();
     const styles_control = new BuildingsStyleControl(STYLES, legend);
-    load_pmtiles(S3_PATH + "/all_countries.pmtiles");
-        // load_pmtiles(S3_PATH + "/pmtiles/" + "v0_1-CYP.pmtiles");
-    // load_pmtiles(S3_PATH + "/pmtiles/" + "v0_1-BGR.pmtiles");
+    load_pmtiles(S3_PATH + "/all_countries_new.pmtiles");
+
     map.addControl(styles_control, "top-left");
-    map.addControl(legend, "bottom-left"); 
+    map.addControl(legend, "bottom-left");
 });
