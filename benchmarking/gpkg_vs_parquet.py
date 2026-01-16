@@ -6,14 +6,16 @@ import random
 #TODO add a code to replace '-' with '_' and atomatically switch to other countries/maybe not necessary
 gpkg_file = "files/v0_1-CYP.gpkg"
 zipped_gpkg_file = "files/v0_1-CYP.gpkg.zip"
-ogr_parquet_file = "files/v0_1-CYP-ogr2ogr.parquet"
-gpio_parquet_file = "files/v0_1-CYP-gpio.parquet"
+ogr_parquet_file = "files/v0_1-CYP_ogr2ogr.parquet"
+gpio_parquet_file = "files/v0_1-CYP_gpio.parquet"
+fgb_file = "files/v0_1-CYP_ogr2ogr.fgb"
 
 files = [
     ("gpkg", gpkg_file),
     ("zipped gpkg", zipped_gpkg_file),
     ("ogr parquet", ogr_parquet_file),
-    ("gpio parquet", gpio_parquet_file)
+    ("gpio parquet", gpio_parquet_file),
+    ("flatgeobuf", fgb_file)
 ]
 
 con = duckdb.connect()
@@ -59,6 +61,10 @@ for name, path in files:
 
     if path.endswith(".gpkg"):
         con.sql(f"SELECT count(*) FROM ST_Read('{path}')").fetchall()
+
+    elif path.endswith(".zip"):
+        con.sql(f"SELECT count(*) FROM ST_Read('{path}')").fetchall()
+
     else: 
         con.sql(f"SELECT count(*) FROM '{path}'").fetchall()
 
@@ -78,11 +84,12 @@ for name, path in files:
     if not os.path.exists(path):
         continue
 
-    # if path.endswith(".zip"):
-    #     continue
-
     if path.endswith(".gpkg"):
         columns = con.sql(f"DESCRIBE SELECT * FROM ST_Read('{path}')").df()['column_name'].tolist()
+
+    elif path.endswith(".zip"):
+        columns = con.sql(f"DESCRIBE SELECT * FROM ST_Read('{path}')").df()['column_name'].tolist()
+
     else:
         columns = con.sql(f"DESCRIBE SELECT * FROM '{path}'").df()['column_name'].tolist()
     
@@ -94,6 +101,15 @@ for name, path in files:
     start_time = time.time()
 
     if path.endswith(".gpkg"):
+        con.sql(f"""
+                COPY( 
+                    SELECT
+                        * EXCLUDE {geo_col}, 
+                        ST_AsText({geo_col}) AS wkt 
+                    FROM ST_Read('{path}')
+                ) TO '{output_csv}' WITH (HEADER, DELIMITER ';')
+            """)
+    elif path.endswith(".zip"):
         con.sql(f"""
                 COPY( 
                     SELECT
@@ -132,14 +148,16 @@ for name, path in files:
     if not os.path.exists(path): 
         continue
 
-    # if path.endswith(".zip"):
-    #     continue
 
     start_time = time.time()
 
     # for Cyprus age and type is NULL, so I only did height
     if path.endswith(".gpkg"):
         con.sql(f"SELECT min(height), max(height) FROM ST_Read('{path}')").fetchall()
+
+    elif path.endswith(".zip"):
+        con.sql(f"SELECT min(height), max(height) FROM ST_Read('{path}')").fetchall()
+       
     else:
         con.sql(f"SELECT min(height), max(height) FROM '{path}'").fetchall()   
 
@@ -150,13 +168,14 @@ for name, path in files:
     if not os.path.exists(path): 
         continue
 
-    # if path.endswith(".zip"):
-    #     continue
-
     start_time = time.time()
 
     if path.endswith(".gpkg"):
         con.sql(f"SELECT avg(height) FROM ST_Read('{path}')").fetchall()
+    
+    elif path.endswith(".zip"):
+        con.sql(f"SELECT avg(height) FROM ST_Read('{path}')").fetchall()
+
     else:
         con.sql(f"SELECT avg(height) FROM '{path}'").fetchall()   
 
@@ -213,6 +232,10 @@ for name, path in files:
 
     if path.endswith(".gpkg"):
         columns = con.sql(f"DESCRIBE SELECT * FROM ST_Read('{path}')").df()['column_name'].tolist()
+
+    elif path.endswith(".zip"):
+        columns = con.sql(f"DESCRIBE SELECT * FROM ST_Read('{path}')").df()['column_name'].tolist()
+
     else:
         columns = con.sql(f"DESCRIBE SELECT * FROM '{path}'").df()['column_name'].tolist()
     
@@ -236,6 +259,13 @@ for name, path in files:
                     SELECT count(*) FROM ST_Read('{path}')
                     WHERE ST_Intersects({geo_col}, ST_MakeEnvelope({local_minx}, {local_miny}, {local_maxx}, {local_maxy}))
                 """).fetchall()
+
+            elif path.endswith(".zip"):
+                 con.sql(f"""
+                    SELECT count(*) FROM ST_Read('{path}')
+                    WHERE ST_Intersects({geo_col}, ST_MakeEnvelope({local_minx}, {local_miny}, {local_maxx}, {local_maxy}))
+                """).fetchall()         
+                       
             else:
                 con.sql(f"""
                     SELECT count(*) FROM '{path}'
