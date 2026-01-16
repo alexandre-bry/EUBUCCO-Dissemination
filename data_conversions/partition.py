@@ -15,14 +15,22 @@ from geoparquet_io.core.check_parquet_structure import check_all
 def partition_gpkg_to_parquet(
     input_dir : Path,
     output_dir: Path,
+    countries: list[str] | None = None,
     max_workers: int | None = None,
     overwrite: bool = False,
 ):
     
     all_files = list(input_dir.glob("*.gpkg"))
-    print(all_files)
 
-    print(f"Converting all gpkg in {input_dir} to {output_dir}")
+    if countries is not None:
+        countries = {c.upper() for c in countries}
+        all_files = [
+            f for f in all_files
+            if f.stem.upper() in countries
+        ]
+    #print(all_files)
+
+    logging.info(f"Converting all gpkg in {input_dir} to {output_dir}")
     #output_dir.mkdir(parents=True, exist_ok=True)
 
     # Use as many workers as there are CPU cores unless overridden
@@ -71,14 +79,23 @@ def partition_gpkg_to_parquet_one_country(
 def partition_parquet_to_h3(
     input_dir : Path,
     output_dir: Path,
+    countries: list[str] | None = None,
     max_workers: int | None = None,
     overwrite: bool = False,
 ):
     
     all_files = list(input_dir.glob("*.parquet"))
-    print(all_files)
 
-    print(f"Converting all parquet in {input_dir} to {output_dir}")
+    if countries is not None:
+        countries = {c.upper() for c in countries}
+        all_files = [
+            f for f in all_files
+            if f.stem.upper() in countries
+        ]
+    
+    #print(all_files)
+
+    logging.info(f"Converting all parquet in {input_dir} to {output_dir}")
     #output_dir.mkdir(parents=True, exist_ok=True)
 
     # Use as many workers as there are CPU cores unless overridden
@@ -128,17 +145,33 @@ def cli():
     p1 = sub.add_parser("gpkg-to-parquet")
     p1.add_argument("input_dir", type=Path)
     p1.add_argument("output_dir", type=Path)
+    p1.add_argument(
+        "--countries",
+        nargs="+",
+        help="List of country codes to process (e.g. DEU FRA ITA)",
+    )
 
     p2 = sub.add_parser("parquet-to-h3")
     p2.add_argument("input_dir", type=Path)
     p2.add_argument("output_dir", type=Path)
+    p2.add_argument(
+        "--countries",
+        nargs="+",
+        help="List of country codes to process (e.g. DEU FRA ITA)"),
 
     args = parser.parse_args()
 
     if args.command == "gpkg-to-parquet":
-        partition_gpkg_to_parquet(args.input_dir, args.output_dir)
+        partition_gpkg_to_parquet(
+            input_dir=args.input_dir,
+            output_dir=args.output_dir,
+            countries=args.countries,
+        )
     elif args.command == "parquet-to-h3":
-        partition_parquet_to_h3(args.input_dir, args.output_dir)
+        partition_parquet_to_h3(
+            args.input_dir,
+            args.output_dir,
+        )
 
 if __name__ == "__main__":
     cli()
