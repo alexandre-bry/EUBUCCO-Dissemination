@@ -2,13 +2,19 @@
     "CORSRules": [
         {
             "AllowedOrigins": [
-                "https://alexandre-bry.github.io",
                 "http://localhost:5173",
                 "https://alexandre-bry.github.io",
                 "https://pmtiles.io"
             ],
             "AllowedHeaders": ["*"],
-            "AllowedMethods": ["GET", "HEAD"]
+            "AllowedMethods": ["GET", "HEAD", "PUT", "POST", "DELETE"],
+            "ExposeHeaders": [
+                "ETag",
+                "Content-Length",
+                "Accept-Ranges",
+                "Content-Range"
+            ],
+            "MaxAgeSeconds": 3000
         }
     ]
 }

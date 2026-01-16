@@ -64,7 +64,7 @@ async function handleDownload() {
         `);
 
         // const sourcePath = 's3://eubuccodissemination.fsn1.your-objectstorage.com/partition-h3_res4/**/*.parquet';
-        const sourcePath = 's3://eubuccodissemination.fsn1.your-objectstorage.com/partition-country/**/*parquet';
+        const sourcePath = 'https://eubuccodissemination.fsn1.your-objectstorage.com/partition-country/**/*parquet';
             
         let query = "";
         let outputFilename = "";
