@@ -1,9 +1,14 @@
 {
-  "CORSRules": [
-    {
-      "AllowedOrigins": ["https://alexandre-bry.github.io"],
-      "AllowedHeaders": ["*"],
-      "AllowedMethods": ["GET", "HEAD"]
-    }
-  ]
+    "CORSRules": [
+        {
+            "AllowedOrigins": [
+                "https://alexandre-bry.github.io",
+                "http://localhost:5173",
+                "https://alexandre-bry.github.io",
+                "https://pmtiles.io"
+            ],
+            "AllowedHeaders": ["*"],
+            "AllowedMethods": ["GET", "HEAD"]
+        }
+    ]
 }

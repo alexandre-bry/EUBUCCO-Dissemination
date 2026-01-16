@@ -689,13 +689,14 @@ def convert_one_to_pmtiles(
             str(save_path),
             "-l",
             layer,
-            # "--coalesce-densest-as-needed",
-            "--drop-densest-as-needed",
+            "--coalesce-densest-as-needed",
+            # "--drop-densest-as-needed",
             "--include=height",
             "--include=age",
             "--include=type",
-            # "-M",
-            # 1_000_000,
+            "--no-feature-limit",
+            "-M",
+            1_000_000,
             str(input_path),
         ]
 
