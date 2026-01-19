@@ -1,0 +1,24 @@
+#bbox-map {
+    border: 2px solid var(--dark-color-1);
+}
+
+.bbox-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+
+.bbox-input label {
+    display: block;
+    font-size: 12px;
+    margin-bottom: 4px;
+}
+
+.bbox-input input {
+    width: 100%;
+    padding: 8px;
+    background: #333;
+    border: 1px solid #555;
+    color: white;
+    border-radius: 4px;
+}
