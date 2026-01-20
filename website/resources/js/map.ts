@@ -233,13 +233,11 @@ function load_pmtiles(url: string) {
                     [
                         "match",
                         ["get", "type"],
-                        "",
-                        TYPE_COLORS[-1],
-                        TYPE_VALUES.slice(0, -1).flatMap((type, i) => [
+                        ...TYPE_VALUES.slice(0, -1).flatMap((type, i) => [
                             type,
-                            TYPE_COLORS[i],
+                            TYPE_COLORS.at(i),
                         ]),
-                        TYPE_COLORS[-1],
+                        TYPE_COLORS.at(-1),
                     ],
                     "#dddddd",
                 ],
@@ -347,7 +345,7 @@ const S3_PATH = import.meta.env.PROD
 map.on("load", () => {
     const legend = new LegendControl();
     const styles_control = new BuildingsStyleControl(STYLES, legend);
-    load_pmtiles(S3_PATH + "/all_countries_new.pmtiles");
+    load_pmtiles(S3_PATH + "/all_countries_new_new.pmtiles");
 
     map.addControl(styles_control, "top-left");
     map.addControl(legend, "bottom-left");
