@@ -39,7 +39,7 @@ const HEIGHT_COLORS = [
     "#ffff00",
 ];
 
-const HEIGHT_VALUES = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+const HEIGHT_VALUES = [0, 5, 10, 15, 20, 30, 40, 50, 60, 80, 100];
 
 const YEAR_COLORS = [
     "#6f0000",
