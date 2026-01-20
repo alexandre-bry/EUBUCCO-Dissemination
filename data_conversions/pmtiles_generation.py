@@ -691,6 +691,8 @@ def _run_cmd_with_progress(
     stdout_out.extend(p.stdout.readlines())
     stderr_out.extend(p.stderr.readlines())
 
+    pbar.n = 100
+    pbar.refresh()
     pbar.close()
     stdout = "".join(stdout_out)
     stderr = "".join(stderr_out)
@@ -741,7 +743,7 @@ def convert_files_to_one_pmtiles(
         # "--reorder",
         "--no-feature-limit",
         # "--no-tile-size-limit",
-        f"-M {1_000_000}",
+        f"-M {2_000_000}",
         *input_paths_str,
     ]
 
