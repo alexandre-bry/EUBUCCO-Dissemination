@@ -3,6 +3,11 @@ import os
 from dotenv import dotenv_values
 from botocore.exceptions import NoCredentialsError
 
+"""
+Creates the manifest of all the GeoParquet files in the H3 partition.
+"""
+
+
 # --- CONFIGURATION ---
 S3_ENDPOINT = "https://fsn1.your-objectstorage.com"
 BUCKET_NAME = "eubuccodissemination"

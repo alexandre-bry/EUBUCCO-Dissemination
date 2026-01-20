@@ -3,6 +3,7 @@ class Header extends HTMLElement {
         super();
     }
     
+
     connectedCallback() {
         // Detect current page to highlight active link
         const currentPath = window.location.pathname;
