@@ -16,7 +16,11 @@
     },
     "dependencies": {
         "@duckdb/duckdb-wasm": "^1.33.1-dev18.0",
+        "@mapbox/mapbox-gl-draw": "^1.5.1",
+        "@types/mapbox__mapbox-gl-draw": "^1.4.9",
+        "h3-js": "^4.4.0",
         "mapbox-gl": "^3.17.0",
+        "mapbox-gl-draw-rectangle-mode": "^1.0.4",
         "maplibre-gl": "^5.15.0",
         "pmtiles": "^4.3.0"
     }
