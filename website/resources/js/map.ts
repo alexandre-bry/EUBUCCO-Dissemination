@@ -206,7 +206,7 @@ function load_pmtiles(url: string) {
                         [
                             "interpolate",
                             ["linear"],
-                            ["get", "height"],
+                            ["to-number", ["get", "height"]],
                             ...HEIGHT_VALUES.flatMap((height, i) => [
                                 height,
                                 HEIGHT_COLORS[i],
@@ -222,7 +222,7 @@ function load_pmtiles(url: string) {
                         [
                             "interpolate",
                             ["linear"],
-                            ["get", "age"],
+                            ["to-number", ["get", "age"]],
                             ...YEAR_VALUES.flatMap((year, i) => [
                                 year,
                                 YEAR_COLORS[i],
