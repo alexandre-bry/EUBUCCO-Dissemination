@@ -276,8 +276,8 @@ function load_pmtiles(url: string) {
                 "source-layer": level,
                 type: "line",
                 paint: {
-                    "line-color": "#297",
-                    "line-width": 5,
+                    "line-color": "#007bff",
+                    "line-width": 3,
                     "line-blur": 5,
                 },
             });

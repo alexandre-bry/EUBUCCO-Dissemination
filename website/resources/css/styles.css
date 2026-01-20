@@ -91,7 +91,7 @@ header-component {
 
 /* Layer Selector */
 .attribute-control-panel {
-    background-color: #ffffff;
+    background-color: #d8d8d8;
     padding: 12px;
     border-radius: 4px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.2);
@@ -102,7 +102,7 @@ header-component {
     font-weight: 600;
     margin-bottom: 10px;
     font-size: 14px; 
-    border-bottom: 2px solid #eee;
+    border-bottom: 2px solid #656565;
     padding-bottom: 5px;
     color: var(--dark-color-1);
     text-align: left;
@@ -130,12 +130,12 @@ header-component {
 .attribute-button.active {
     font-weight: 700;
     color: var(--dark-color-1);
-    background-color: rgb(231, 231, 231);
+    background-color: #ebebeb;
 }
 
 /* Legend Container */
 .map-legend {
-    background-color: #ffffff;
+    background-color: #d8d8d8;
     padding: 12px;
     border-radius: 4px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.2);
@@ -151,7 +151,7 @@ header-component {
     font-weight: 600;
     margin-bottom: 10px;
     font-size: 14px; 
-    border-bottom: 2px solid #eee;
+    border-bottom: 2px solid #656565;
     padding-bottom: 5px;
     text-transform: capitalize;
 }
