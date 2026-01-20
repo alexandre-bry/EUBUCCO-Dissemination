@@ -19,8 +19,8 @@ class Header extends HTMLElement {
         this.innerHTML = `
       <header>
         <nav>
-            <a href="data.html" class="header-nav-link">Download</a>
             <a href="map.html" class="header-nav-link">Map</a>
+            <a href="data.html" class="header-nav-link">Download</a>
         </nav>
       </header>
     `;
