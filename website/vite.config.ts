@@ -41,7 +41,7 @@ export default defineConfig({
                 changeOrigin: true,
                 rewrite: (path) => path.replace(/^\/api/, ""),
             },
-            
+
             // (For DuckDB Data Download)
             "/s3": {
                 target: "https://fsn1.your-objectstorage.com",
@@ -56,8 +56,7 @@ export default defineConfig({
             input: {
                 main: resolve(__dirname, "index.html"),
                 data: resolve(__dirname, "data.html"),
-                map: resolve(__dirname, "map.html"),
-                about: resolve(__dirname, "about.html"),
+                // about: resolve(__dirname, "about.html"),
             },
         },
     },
