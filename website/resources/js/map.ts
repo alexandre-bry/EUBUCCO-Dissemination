@@ -19,7 +19,7 @@ map.addControl(
         visualizeRoll: true,
         showZoom: true,
         showCompass: true,
-    })
+    }),
 );
 
 const STYLES = ["Height", "Construction year", "Type"];
@@ -233,7 +233,9 @@ function load_pmtiles(url: string) {
                     [
                         "match",
                         ["get", "type"],
-                        ...TYPE_VALUES.slice(0, -1).flatMap((type, i) => [
+                        "",
+                        TYPE_COLORS[-1],
+                        TYPE_VALUES.slice(0, -1).flatMap((type, i) => [
                             type,
                             TYPE_COLORS[i],
                         ]),
