@@ -81,7 +81,7 @@ async function handleDownload() {
     const isBBoxSelection = !!(minLonStr && minLatStr && maxLonStr && maxLatStr);
 
     if (!countryCode && !isBBoxSelection) {
-        alert("Please select a country or enter VALID coordinates.");
+        alert("Please select a country or enter valid coordinates.");
         return;
     }
 
@@ -102,7 +102,7 @@ async function handleDownload() {
         link.download = `eubucco_${iso3}.${extension}`;
         link.click();
         
-        statusMsg.innerText = "Download started!";
+        statusMsg.innerText = "Download started, the file will be downloaded soon!";
         downloadBtn.disabled = false;
         return; 
     }
@@ -172,7 +172,7 @@ async function handleDownload() {
         statusMsg.innerText = "Preparing file...";
         const buffer = await db.copyFileToBuffer(outputFilename);
         
-        // MEMORY CLEANUP: Delete the file from DuckDB memory now that we have the JS buffer
+        // Delete the file from DuckDB memory now that we have the JS buffer
         await db.dropFile(outputFilename);
 
         const blob = new Blob([buffer as any], { type: 'application/octet-stream' });
@@ -258,7 +258,6 @@ const formatSelect = document.getElementById('format-select') as HTMLSelectEleme
 const fgbOption = formatSelect.querySelector('option[value="fgb"]') as HTMLOptionElement;
 
 //Helper to restrict format based on selection type
-
 function updateFormatVisibility(isBBoxActive: boolean) {
     if (isBBoxActive) {
         // Force selection to GeoParquet if BBox is used
