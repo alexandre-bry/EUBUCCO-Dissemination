@@ -4,6 +4,10 @@ import duckdb_wasm from '@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm?url';
 import mvp_worker from '@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js?url';
 import duckdb_eh_wasm from '@duckdb/duckdb-wasm/dist/duckdb-eh.wasm?url';
 import eh_worker from '@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url';
+import maplibregl from 'maplibre-gl';
+import MapboxDraw from '@mapbox/mapbox-gl-draw';
+// @ts-ignore
+import DrawRectangle from 'mapbox-gl-draw-rectangle-mode';
 
 // --- CONFIGURATION ---
 const BUCKET_NAME = "eubuccodissemination";
@@ -100,7 +104,7 @@ async function handleDownload() {
         
         statusMsg.innerText = "Download started!";
         downloadBtn.disabled = false;
-        return; // EXIT EARLY - NO DUCKDB NEEDED
+        return; 
     }
 
     // --- DUCKDB PROCESSING DOWNLOAD (FOR BBOX) ---
@@ -139,7 +143,7 @@ async function handleDownload() {
             return; 
         }
 
-        // Safety limit for BBox (prevents browser crash)
+        // Safety limit to prevent memory crash
         if (validFileList.length > 250) {
             alert("Selection area is too large for browser-side processing. Please select a smaller area or download the whole country.");
             downloadBtn.disabled = false;
@@ -190,9 +194,123 @@ async function handleDownload() {
     }
 }
 
+// --- MAP LOGIC ---
+let map: maplibregl.Map;
+let draw: MapboxDraw;
+
+function initMap() {
+    map = new maplibregl.Map({
+        container: 'map',
+        style: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json", 
+        center: [15, 50],
+        zoom: 3
+    });
+
+    draw = new MapboxDraw({
+        displayControlsDefault: false,
+        modes: {
+            ...MapboxDraw.modes,
+            'draw_rectangle': DrawRectangle
+        }
+    });
+
+    map.addControl(draw as any);
+
+    const updateInputsFromMap = () => {
+        const data = draw.getAll();
+        if (data.features.length > 0) {
+            const coords = (data.features[0].geometry as any).coordinates[0];
+            const lons = coords.map((p: any) => p[0]);
+            const lats = coords.map((p: any) => p[1]);
+
+            (document.getElementById('min-lon') as HTMLInputElement).value = Math.min(...lons).toFixed(4);
+            (document.getElementById('max-lon') as HTMLInputElement).value = Math.max(...lons).toFixed(4);
+            (document.getElementById('min-lat') as HTMLInputElement).value = Math.min(...lats).toFixed(4);
+            (document.getElementById('max-lat') as HTMLInputElement).value = Math.max(...lats).toFixed(4);
+
+            // Manually trigger the input event so existing exclusivity logic runs
+            document.getElementById('min-lon')?.dispatchEvent(new Event('input'));
+        }
+    };
+
+    map.on('draw.create', () => {
+            updateInputsFromMap();
+            
+            // the "drawing" state to end
+            setTimeout(() => {
+                draw.changeMode('simple_select');
+            }, 0);
+
+            const drawBtn = document.getElementById('draw-bbox-btn');
+            if (drawBtn) {
+                drawBtn.classList.remove('active');
+                drawBtn.innerText = "Draw Rectangle"; 
+            }
+        });
+
+        // Update if the user drags the finished rectangle
+        map.on('draw.update', updateInputsFromMap);
+    }
+
+
+// --- BUTTONS AND ACTION STUFF ---
+const formatSelect = document.getElementById('format-select') as HTMLSelectElement;
+const fgbOption = formatSelect.querySelector('option[value="fgb"]') as HTMLOptionElement;
+
+//Helper to restrict format based on selection type
+
+function updateFormatVisibility(isBBoxActive: boolean) {
+    if (isBBoxActive) {
+        // Force selection to GeoParquet if BBox is used
+        formatSelect.value = "geoparquet";
+        fgbOption.disabled = true;
+        fgbOption.textContent = "FlatGeobuf (Country only)";
+    } else {
+        fgbOption.disabled = false;
+        fgbOption.textContent = "FlatGeobuf (.fgb)";
+    }
+}
+
+document.getElementById('draw-bbox-btn')?.addEventListener('click', (e) => {
+    const btn = e.currentTarget as HTMLButtonElement;
+    
+    // If we are already drawing, clicking again cancels it
+    if (btn.classList.contains('active')) {
+        draw.changeMode('simple_select');
+        btn.classList.remove('active');
+        btn.innerText = "Draw Rectangle";
+    } else {
+        draw.deleteAll();
+        draw.changeMode('draw_rectangle');
+        btn.classList.add('active');
+        btn.innerText = "Click 2 points on map";
+    }
+});
+
+document.getElementById('clear-bbox-btn')?.addEventListener('click', () => {
+    draw.deleteAll();
+    bboxInputs.forEach(input => {
+        input.value = "";
+        input.disabled = false;
+        input.parentElement?.classList.remove('disabled-opacity');
+    });
+    countrySelect.disabled = false;
+    
+    const drawBtn = document.getElementById('draw-bbox-btn');
+    if (drawBtn) {
+        drawBtn.classList.remove('active');
+        drawBtn.innerText = "Draw Rectangle";
+    }
+
+    // Reset format visibility since coordinates are cleared
+    updateFormatVisibility(false);
+});
+
+// Initialize map on load
+initMap();
+
 document.getElementById('download-btn')?.addEventListener('click', handleDownload);
 
-// --- UI EXCLUSIVITY LOGIC ---
 const countrySelect = document.getElementById('country-select') as HTMLSelectElement;
 const bboxInputs = [
     document.getElementById('min-lon') as HTMLInputElement,
@@ -201,34 +319,41 @@ const bboxInputs = [
     document.getElementById('max-lat') as HTMLInputElement
 ];
 
-// Function to handle Country Selection
-countrySelect.addEventListener('change', () => {
-    if (countrySelect.value !== "") {
-        // If a country is selected, clear and disable BBox inputs
-        bboxInputs.forEach(input => {
-            input.value = "";
-            input.disabled = true;
-            input.parentElement?.classList.add('disabled-opacity'); // Optional: for styling
-        });
-    } else {
-        // If country is reset to empty, re-enable BBox inputs
-        bboxInputs.forEach(input => input.disabled = false);
-    }
-});
-
-// Function to handle BBox input
+// Handle BBox input (sruns for manual typing AND Map drawing)
 bboxInputs.forEach(input => {
     input.addEventListener('input', () => {
-        // Check if ANY of the bbox inputs have text
         const hasBBoxValue = bboxInputs.some(i => i.value.trim() !== "");
-        
         if (hasBBoxValue) {
-            // If user starts typing coordinates, reset and disable country select
             countrySelect.value = "";
             countrySelect.disabled = true;
+            // Disable FlatGeobuf for BBox selections
+            updateFormatVisibility(true);
         } else {
-            // If all coordinates are cleared, re-enable country select
             countrySelect.disabled = false;
+            draw.deleteAll();
+            // Re-enable FlatGeobuf if coordinates are cleared
+            updateFormatVisibility(false);
         }
     });
 });
+
+// Handle Country Selection
+countrySelect.addEventListener('change', () => {
+    if (countrySelect.value !== "") {
+        bboxInputs.forEach(input => {
+            input.value = "";
+            input.disabled = true;
+            input.parentElement?.classList.add('disabled-opacity');
+        });
+        if (draw) draw.deleteAll();
+        
+        // Country selection allows FlatGeobuf
+        updateFormatVisibility(false);
+    } else {
+        bboxInputs.forEach(input => {
+            input.disabled = false;
+            input.parentElement?.classList.remove('disabled-opacity');
+        });
+    }
+});
+

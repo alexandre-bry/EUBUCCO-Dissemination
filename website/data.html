@@ -4,7 +4,14 @@
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>EUBUCCO Dissemination - Data</title>
+
+        <link href="https://unpkg.com/maplibre-gl@^4.0.0/dist/maplibre-gl.css" rel="stylesheet" />
+        <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.4.3/mapbox-gl-draw.css" type="text/css" />
+
         <link rel="stylesheet" href="resources/css/styles.css" />
+        <link rel="stylesheet" href="resources/css/download.css" />
+
+
         <script src="resources/js/header.ts" type="module" defer></script>
         <script src="resources/js/footer.ts" type="module" defer></script>
         <script src="resources/js/dataDownload.ts" type="module" defer></script>
@@ -14,7 +21,7 @@
 
         <main class="content">
             <h1>Download EUBUCCO data</h1>
-            <p>Choose from 27 European countries to download the whole dataset, or filter by administrative region or custom coordinates.</p>
+            <p>Choose from 27 European countries to download the whole dataset (both in GeoParquet and FlatGeobuf), or filter the data by custom bounding box (only in GeoParquet). </p>
 
             <div class="download-card">
                 <div class="download-section">
@@ -58,6 +65,14 @@
 
                 <div class="download-section">
                     <h3>2. Bounding Box (EPSG:4326)</h3>
+
+                    <div class="map-controls">
+                        <button type="button" id="draw-bbox-btn" class="btn-map">Draw Bbox</button>
+                        <button type="button" id="clear-bbox-btn" class="btn-map">Clear Bbox</button>
+                    </div>
+
+                    <div id="map"></div>
+
                     <div class="bbox-grid">
                         <div class="bbox-input">
                             <label>Min Lon</label>
@@ -92,6 +107,6 @@
                 </div>
             </div> </main>
 
-        <footer-component></footer-component>
+        <!-- <footer-component></footer-component> -->
     </body>
 </html>
