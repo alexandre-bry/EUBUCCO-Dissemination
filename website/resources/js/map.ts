@@ -25,26 +25,59 @@ map.addControl(
 const STYLES = ["Height", "Construction year", "Type"];
 const ADMIN_LEVELS = ["ADM0", "ADM1", "ADM2"];
 
+const HEIGHT_COLORS = [
+    "#002f61",
+    "#004d78",
+    "#00688b",
+    "#008396",
+    "#009c9b",
+    "#00b599",
+    "#00cd8e",
+    "#2ee379",
+    "#81f15e",
+    "#c2fa3d",
+    "#ffff00",
+];
+
+const HEIGHT_VALUES = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+
+const YEAR_COLORS = [
+    "#6f0000",
+    "#872804",
+    "#ad5d16",
+    "#c98824",
+    "#d6a725",
+    "#dbbb1f",
+    "#a9b657",
+    "#5faa7d",
+    "#328573",
+    "#1a5659",
+    "#043d49",
+];
+const YEAR_VALUES = [
+    1000, 1300, 1500, 1600, 1700, 1800, 1900, 1950, 1975, 2000, 2025,
+];
+
+const TYPE_COLORS = ["#003dc1", "#ffb300", "#dddddd"];
+const TYPE_VALUES = ["residential", "non-residential", "other"];
+
+function capitalizeFirstLetter(val: string) {
+    return String(val).charAt(0).toUpperCase() + String(val).slice(1);
+}
+
 const LEGEND_DATA: Record<string, { label: string; color: string }[]> = {
-    Height: [
-        { label: "0m", color: "#ffd044" },
-        { label: "10m", color: "#ffb300" },
-        { label: "20m", color: "#ff8401" },
-        { label: "30m", color: "#ff5900" },
-        { label: "40m+", color: "#fe3b00" },
-    ],
-    "Construction year": [
-        { label: "Before 1945", color: "#d80004" },
-        { label: "1965", color: "#ff8000" },
-        { label: "1985", color: "#feca2f" },
-        { label: "2005", color: "#83cbe3" },
-        { label: "2025", color: "#0970be" },
-    ],
-    Type: [
-        { label: "Residential", color: "#003dc1" },
-        { label: "Non-residential", color: "#ffb300" },
-        { label: "Other", color: "#ddd" },
-    ],
+    Height: HEIGHT_VALUES.map((height, index) => ({
+        label: height.toString() + "m",
+        color: HEIGHT_COLORS[index],
+    })),
+    "Construction year": YEAR_VALUES.map((year, index) => ({
+        label: year.toString(),
+        color: YEAR_COLORS[index],
+    })),
+    Type: TYPE_VALUES.map((type, index) => ({
+        label: capitalizeFirstLetter(type.toString()),
+        color: TYPE_COLORS[index],
+    })),
 };
 
 class LegendControl {
@@ -101,6 +134,7 @@ class BuildingsStyleControl {
 
     onAdd(map: maplibregl.Map) {
         this._map = map;
+        this._map.setGlobalStateProperty("current-style", STYLES[0]);
 
         const title = document.createElement("div");
         title.className = "panel-title";
@@ -168,21 +202,15 @@ function load_pmtiles(url: string) {
                         "match",
                         ["to-string", ["get", "height"]],
                         "",
-                        "#ddd",
+                        "#dddddd",
                         [
                             "interpolate",
                             ["linear"],
                             ["get", "height"],
-                            0,
-                            "#ffd044",
-                            10,
-                            "#ffb300",
-                            20,
-                            "#ff8401",
-                            30,
-                            "#ff5900",
-                            40,
-                            "#fe3b00",
+                            ...HEIGHT_VALUES.flatMap((height, i) => [
+                                height,
+                                HEIGHT_COLORS[i],
+                            ]),
                         ],
                     ],
                     "Construction year",
@@ -190,34 +218,28 @@ function load_pmtiles(url: string) {
                         "match",
                         ["to-string", ["get", "age"]],
                         "",
-                        "#ddd",
+                        "#dddddd",
                         [
                             "interpolate",
                             ["linear"],
                             ["get", "age"],
-                            1945,
-                            "#d80004",
-                            1965,
-                            "#ff8000",
-                            1985,
-                            "#feca2f",
-                            2005,
-                            "#83cbe3",
-                            2025,
-                            "#0970be",
+                            ...YEAR_VALUES.flatMap((year, i) => [
+                                year,
+                                YEAR_COLORS[i],
+                            ]),
                         ],
                     ],
                     "Type",
                     [
                         "match",
                         ["get", "type"],
-                        "residential",
-                        "#003dc1",
-                        "non-residential",
-                        "#ffb300",
-                        "#ddd",
+                        ...TYPE_VALUES.slice(0, -1).flatMap((type, i) => [
+                            type,
+                            TYPE_COLORS[i],
+                        ]),
+                        TYPE_COLORS[-1],
                     ],
-                    "#ddd",
+                    "#dddddd",
                 ],
                 "fill-extrusion-opacity": 1.0,
                 "fill-extrusion-height": ["to-number", ["get", "height"]],
@@ -287,10 +309,6 @@ function load_pmtiles(url: string) {
             [MIN_LON, MAX_LON],
             [MIN_LAT, MAX_LAT],
         ]);
-
-        // map.on("load", () => {
-        // map.addControl(basemapControl, "top-right");
-        // });
     });
 }
 
@@ -320,7 +338,6 @@ function createPropertiesHTML(properties: Record<string, any>): HTMLElement {
     return propertiesDiv;
 }
 
-// const S3_PATH = "https://eubuccodissemination.fsn1.your-objectstorage.com";
 const S3_PATH = import.meta.env.PROD
     ? "https://eubuccodissemination.fsn1.your-objectstorage.com"
     : "/api";
