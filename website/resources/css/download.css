@@ -11,9 +11,11 @@ h1, p{
     text-align: center;
 }
 
+
 .download-card h3{
     text-align: left;
     color: #4c82f7;
+    font-size: 25px;
 }
 
 .download-card {
@@ -132,6 +134,7 @@ select, input {
     border: none;
     border-radius: 4px;
     font-size: 1rem;
+    font-weight: 500;
     cursor: pointer;
     margin-top: 10px;
 }
@@ -143,10 +146,11 @@ select, input {
 
 #status-message {
     margin-top: 10px;
-    font-size: 0.9rem;
-    color: #ffffff;
+    font-size: 0.98rem;
+    color: #007bff;
     text-align: center;
     min-height: 1.2em;
+    font-weight: 800;
 }
 
 .disabled-opacity {
