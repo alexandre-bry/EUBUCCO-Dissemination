@@ -108,6 +108,7 @@ async function handleDownload() {
     }
 
     // --- DUCKDB PROCESSING DOWNLOAD (FOR BBOX) ---
+    let outputFilename = `eubucco_custom.parquet`;
     statusMsg.innerText = "Initializing engine...";
 
     try {
@@ -146,16 +147,38 @@ async function handleDownload() {
         }
 
         if (validFileList.length > 200) {
-            alert(`Area too large (${validFileList.length} cells). Please zoom in or download the whole country.`);
+            alert(`Area too large (${validFileList.length} cells). Please choose a smaller bbox or download the whole country.`);
             downloadBtn.disabled = false;
             return;
         }
 
-        const fileListSQL = validFileList.map(f => `'${f}'`).join(", ");
-        const outputFilename = `eubucco_custom.${format === 'geoparquet' ? 'parquet' : 'fgb'}`;
+        statusMsg.innerText = "Checking the number of buildings...";
 
+        const fileListSQL = validFileList.map(f => `'${f}'`).join(", ");
+
+        const outputFilename = `eubucco_custom.geoparquet`;
+        const countResult = await conn.query(`
+            SELECT SUM(num_values) as total_rows 
+            FROM parquet_metadata([${fileListSQL}])
+            WHERE column_id = 0
+        `);
+
+        const totalEstimatedRows = Number(countResult.toArray()[0].total_rows);
+        const ROW_LIMIT = 2_000_000;
+
+        if (totalEstimatedRows > ROW_LIMIT) {
+            statusMsg.innerText = "Selection has too many buildings.";
+            alert(
+                `Selection area is too large:\n\n` +
+                `You selected approx. ${(totalEstimatedRows / 1_000_000).toFixed(1)} million buildings.\n` +
+                `The browser limit is around ${ROW_LIMIT / 1_000_000} million.\n\n` +
+                `Please zoom in significantly or select a smaller area.`
+            );
+            downloadBtn.disabled = false;
+            return;
+        }
         const query = `
-            SELECT * FROM read_parquet([${fileListSQL}], union_by_name = true)
+            SELECT * FROM read_parquet([${fileListSQL}])
             WHERE ST_Intersects(
                 geometry, 
                 ST_MakeEnvelope(${nMinLon}::DOUBLE, ${nMinLat}::DOUBLE, ${nMaxLon}::DOUBLE, ${nMaxLat}::DOUBLE)
@@ -164,11 +187,7 @@ async function handleDownload() {
 
         statusMsg.innerText = "Extracting buildings (this may take a minute)...";
 
-        if (format === 'geoparquet') {
-            await conn.query(`COPY (${query}) TO '${outputFilename}' (FORMAT PARQUET)`);
-        } else {
-            await conn.query(`COPY (${query}) TO '${outputFilename}' WITH (FORMAT GDAL, DRIVER 'FlatGeobuf')`);
-        }
+        await conn.query(`COPY (${query}) TO '${outputFilename}' (FORMAT PARQUET)`);
 
         statusMsg.innerText = "Preparing file...";
         const buffer = await db.copyFileToBuffer(outputFilename);
@@ -186,30 +205,13 @@ async function handleDownload() {
         setTimeout(() => URL.revokeObjectURL(url), 100);
         statusMsg.innerText = "Download complete!";
 
-        } catch (err: any) {
-                console.error("DuckDB Error:", err);
+    } catch (err: any) {
+        statusMsg.innerText = "Error: " + err.message;
+        console.error("Download error:", err);
 
-        // Check for specific Memory Errors
-        if (err.message.includes("Out of Memory") || 
-            err.message.includes("allocation failure") || 
-            err.message.includes("could not allocate block")) {
-            
-            statusMsg.innerText = "Error: Area too dense.";
-            alert(
-                "Web Memory Limit Reached\n\n" +
-                "The area you selected contains too many buildings for your browser to process at once.\n\n" +
-                "Please select a smaller area or fewer countries."
-            );
-        } else {
-            // Handle other network/logic errors
-            statusMsg.innerText = "Error: " + err.message;
-        }
-
-        // Attempt to clean up memory so the user can try again immediately
         try {
-            if (conn) {
-                await conn.query(`DROP TABLE IF EXISTS temp_buildings`);
-                await db?.dropFile(`eubucco_custom.${format === 'geoparquet' ? 'parquet' : 'fgb'}`).catch(() => {}); 
+            if (db && outputFilename) {
+                await db.dropFile(outputFilename).catch(() => {}); 
             }
         } catch (cleanupErr) {
             console.warn("Cleanup failed:", cleanupErr);
@@ -220,14 +222,6 @@ async function handleDownload() {
         downloadBtn.disabled = false;
     }
 }
-//     } catch (err: any) {
-//         console.error(err);
-//         statusMsg.innerText = "Error: " + err.message;
-//     } finally {
-//         if (conn) await conn.close();
-//         downloadBtn.disabled = false;
-//     }
-// }
 
 // --- MAP LOGIC ---
 let map: maplibregl.Map;
