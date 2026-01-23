@@ -145,9 +145,8 @@ async function handleDownload() {
             return; 
         }
 
-        // Safety limit to prevent memory crash
         if (validFileList.length > 200) {
-            alert("Selection area is too large for browser-side processing. Please select a smaller area or download the whole country.");
+            alert(`Area too large (${validFileList.length} cells). Please zoom in or download the whole country.`);
             downloadBtn.disabled = false;
             return;
         }
@@ -187,14 +186,48 @@ async function handleDownload() {
         setTimeout(() => URL.revokeObjectURL(url), 100);
         statusMsg.innerText = "Download complete!";
 
-    } catch (err: any) {
-        console.error(err);
-        statusMsg.innerText = "Error: " + err.message;
+        } catch (err: any) {
+                console.error("DuckDB Error:", err);
+
+        // Check for specific Memory Errors
+        if (err.message.includes("Out of Memory") || 
+            err.message.includes("allocation failure") || 
+            err.message.includes("could not allocate block")) {
+            
+            statusMsg.innerText = "Error: Area too dense.";
+            alert(
+                "Web Memory Limit Reached\n\n" +
+                "The area you selected contains too many buildings for your browser to process at once.\n\n" +
+                "Please select a smaller area or fewer countries."
+            );
+        } else {
+            // Handle other network/logic errors
+            statusMsg.innerText = "Error: " + err.message;
+        }
+
+        // Attempt to clean up memory so the user can try again immediately
+        try {
+            if (conn) {
+                await conn.query(`DROP TABLE IF EXISTS temp_buildings`);
+                await db?.dropFile(`eubucco_custom.${format === 'geoparquet' ? 'parquet' : 'fgb'}`).catch(() => {}); 
+            }
+        } catch (cleanupErr) {
+            console.warn("Cleanup failed:", cleanupErr);
+        }
+
     } finally {
         if (conn) await conn.close();
         downloadBtn.disabled = false;
     }
 }
+//     } catch (err: any) {
+//         console.error(err);
+//         statusMsg.innerText = "Error: " + err.message;
+//     } finally {
+//         if (conn) await conn.close();
+//         downloadBtn.disabled = false;
+//     }
+// }
 
 // --- MAP LOGIC ---
 let map: maplibregl.Map;
