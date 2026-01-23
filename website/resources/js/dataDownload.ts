@@ -121,7 +121,9 @@ async function handleDownload() {
             SET s3_url_style = 'path';
             SET s3_region = 'fsn1';
             SET s3_use_ssl = true;
-            SET max_memory = '1.5GB';
+            SET threads = 1;            
+            SET max_memory = '1 GB';
+            SET preserve_insertion_order = false;
         `);
 
         const nMinLon = parseFloat(minLonStr);
@@ -144,7 +146,7 @@ async function handleDownload() {
         }
 
         // Safety limit to prevent memory crash
-        if (validFileList.length > 250) {
+        if (validFileList.length > 200) {
             alert("Selection area is too large for browser-side processing. Please select a smaller area or download the whole country.");
             downloadBtn.disabled = false;
             return;
