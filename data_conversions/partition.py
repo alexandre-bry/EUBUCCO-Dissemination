@@ -64,6 +64,8 @@ def partition_gpkg_to_parquet_one_country(
         INPUT_PATH : Path,
         OUTPUT_PATH : Path,
 ):
+    logging.info(f"Starting conversion from {INPUT_PATH}")
+
     # Read the GeoPackage
     gdf = gpd.read_file(INPUT_PATH)
 
@@ -74,7 +76,7 @@ def partition_gpkg_to_parquet_one_country(
     
     # Save to parquet for gpio workflow
     gdf.to_parquet(OUTPUT_PATH)
-    print(f"Processed {INPUT_PATH} to {OUTPUT_PATH}")
+    logging.info(f"Processed {INPUT_PATH} to {OUTPUT_PATH}")
 
 def partition_parquet_to_h3(
     input_dir : Path,
