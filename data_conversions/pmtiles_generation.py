@@ -1164,6 +1164,8 @@ def make_pmtiles(
             overwrite=False,
         )
 
+        logging.info(f"Final PMTiles available at '{final_pmtiles_path}'.")
+
         # # Join everything in each country into one PMTiles
         # country_pmtiles_dir = data_dir / "pmtiles" / "country"
         # results = join_pmtiles_per_country(
