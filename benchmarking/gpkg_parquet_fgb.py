@@ -37,13 +37,13 @@ def get_geo_col(name, path):
     cols = con.sql(f"DESCRIBE SELECT * FROM {src} LIMIT 1").df()['column_name'].tolist()
     return 'geometry' if 'geometry' in cols else 'geom'
 
-# --- START OF BENCHMARK LOGIC (No more for loop here) ---
+# --- START OF BENCHMARK LOGIC ---
 
 print(f"\n==========================================")
 print(f"STARTING BENCHMARK: {country_name} ({code})")
 print(f"==========================================")
 
-# File paths - Added missing slashes to zipped and fgb paths
+# File paths 
 gpkg_file = f"files/{code}/v0_1-{code}.gpkg"
 zipped_gpkg_file = f"files/{code}/v0_1-{code}.gpkg.zip"
 parquet_file = f"files/{code}/{code}.parquet"

@@ -192,7 +192,7 @@ async function handleDownload() {
         statusMsg.innerText = "Preparing file...";
         const buffer = await db.copyFileToBuffer(outputFilename);
         
-        // Delete the file from DuckDB memory now that we have the JS buffer
+        // Delete the file from DuckDB memory when we have the JS buffer
         await db.dropFile(outputFilename);
 
         const blob = new Blob([buffer as any], { type: 'application/octet-stream' });
@@ -286,7 +286,7 @@ function initMap() {
 const formatSelect = document.getElementById('format-select') as HTMLSelectElement;
 const fgbOption = formatSelect.querySelector('option[value="fgb"]') as HTMLOptionElement;
 
-//Helper to restrict format based on selection type
+// Helper to restrict format based on selection type
 function updateFormatVisibility(isBBoxActive: boolean) {
     if (isBBoxActive) {
         // Force selection to GeoParquet if BBox is used
@@ -347,7 +347,7 @@ const bboxInputs = [
     document.getElementById('max-lat') as HTMLInputElement
 ];
 
-// Handle BBox input (sruns for manual typing AND Map drawing)
+// Handle BBox input 
 bboxInputs.forEach(input => {
     input.addEventListener('input', () => {
         const hasBBoxValue = bboxInputs.some(i => i.value.trim() !== "");
