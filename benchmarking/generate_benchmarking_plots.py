@@ -61,7 +61,16 @@ g4.set_yscale("log")
 plt.title("Test 4: Attribute Access Speed (Average Height)")
 plt.ylabel("Time (Seconds) - Log Scale")
 plt.legend(title="Format", bbox_to_anchor=(1.05, 1), loc='upper left')
-plt.savefig("bench_4_attributes.png", dpi=300, bbox_inches='tight')
+plt.savefig("bench_4a_attributes.png", dpi=300, bbox_inches='tight')
+
+plt.figure(figsize=(12, 6))
+g4 = sns.barplot(data=df[df['Test'] == 'Attr MinMax'], x="Country", y="Value", hue="Format", 
+                 hue_order=format_order, order=country_order, palette=palette)
+g4.set_yscale("log")
+plt.title("Test 4: Attribute Access Speed (Min/Max Height)")
+plt.ylabel("Time (Seconds) - Log Scale")
+plt.legend(title="Format", bbox_to_anchor=(1.05, 1), loc='upper left')
+plt.savefig("bench_4b_attributes.png", dpi=300, bbox_inches='tight')
 
 # --- FIGURE 5: SPATIAL QUERY SCALING (Test 5) ---
 bbox_df = df[df['Test'] == 'BBox Filtering'].copy()
