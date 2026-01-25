@@ -2,280 +2,184 @@ import duckdb
 import os
 import time
 import random
+import pandas as pd
+import sys
 
+# --- CONFIGURATION ---
+all_countries = {
+    "Cyprus": "CYP",
+    "Spain": "ESP",
+    "France": "FRA"
+}
 
-gpkg_file = "files/v0_1-CYP.gpkg"
-zipped_gpkg_file = "files/v0_1-CYP.gpkg.zip"
-ogr_parquet_file = "files/v0_1-CYP_ogr2ogr.parquet"
-gpio_parquet_file = "files/v0_1-CYP_gpio.parquet"
-fgb_file = "files/v0_1-CYP_ogr2ogr.fgb"
+# Check if a country was provided in the terminal
+if len(sys.argv) < 2:
+    print("Error: Please provide a country name (e.g., uv run gpkg_parquet_fgb.py Cyprus)")
+    sys.exit(1)
 
-files = [
-    ("gpkg", gpkg_file),
-    ("zipped gpkg", zipped_gpkg_file),
-    ("ogr parquet", ogr_parquet_file),
-    ("gpio parquet", gpio_parquet_file),
-    ("flatgeobuf", fgb_file)
-]
+target_country = sys.argv[1]
 
+if target_country not in all_countries:
+    print(f"Error: {target_country} not found in configuration. Available: Cyprus, Spain, France")
+    sys.exit(1)
+
+# Set the active country and code
+country_name = target_country
+code = all_countries[target_country]
+
+all_results = []
 con = duckdb.connect()
 con.sql("INSTALL spatial; LOAD spatial;")
 
-"""
-Test 1: Storage size test
-    - See how much smaller Geoparquet is in comparison to Geopackage
-"""
+def get_geo_col(name, path):
+    """Helper to find if geometry column is 'geom' or 'geometry'"""
+    src = f"ST_Read('{path}')" if name in ["GPKG", "Zipped GPKG"] else f"'{path}'"
+    cols = con.sql(f"DESCRIBE SELECT * FROM {src} LIMIT 1").df()['column_name'].tolist()
+    return 'geometry' if 'geometry' in cols else 'geom'
 
-print("Test 1: Storage Size Test")
+# --- START OF BENCHMARK LOGIC (No more for loop here) ---
 
-baseline_size = 0
+print(f"\n==========================================")
+print(f"STARTING BENCHMARK: {country_name} ({code})")
+print(f"==========================================")
 
+# File paths - Added missing slashes to zipped and fgb paths
+gpkg_file = f"files/{code}/v0_1-{code}.gpkg"
+zipped_gpkg_file = f"files/{code}/v0_1-{code}.gpkg.zip"
+parquet_file = f"files/{code}/{code}.parquet"
+fgb_file = f"files/{code}/{code}.fgb"
+
+files = [
+    ("GPKG", gpkg_file),
+    ("Zipped GPKG", zipped_gpkg_file),
+    ("GeoParquet", parquet_file),
+    ("FlatGeobuf", fgb_file)
+]
+
+# --- TEST 1: STORAGE SIZE ---
+print(f"[{country_name}] Test 1: Storage Size")
 for name, path in files:
     if os.path.exists(path):
-        # convert bytes to megabytes, divide the byte value by (1024 * 1024)
-        size_mb = os.path.getsize(path)/(1024 * 1024)
-        if name == "gpkg":
-            baseline_size = size_mb
-            print(f"{name:<20} : {size_mb:.2f} MB")
-        else: 
-            difference = ((baseline_size - size_mb)/baseline_size)*100
-            print(f"{name:<20} : {size_mb:.2f} MB ({difference:.1f}% smaller)")
-    else: 
-        print(f"File {name:<20} not found.")
+        size_mb = os.path.getsize(path) / (1024 * 1024)
+        all_results.append({"Country": country_name, "Format": name, "Test": "Storage Size", "Metric": "MB", "Value": size_mb})
 
-"""
-Test 2: Counting all rows
-    - See how long it takes to read the whole file. 
-"""
-print()
-print("Test 2: Counting all rows")
-
+# --- TEST 2: COUNTING ALL ROWS ---
+print(f"[{country_name}] Test 2: Counting Rows")
 for name, path in files:
-    if not os.path.exists(path): 
+    if not os.path.exists(path): continue
+
+    if country_name == "Spain" and name == "Zipped GPKG":
+        print(f"   ! Skipping {name} for {country_name} to avoid excessive unzip time.")
+        continue
+
+    if country_name == "France" and name == "Zipped GPKG":
+        print(f"   ! Skipping {name} for {country_name} to avoid excessive unzip time.")
         continue
 
     start_time = time.time()
 
-    # if path.endswith(".zip"):
-    #     continue
+    src = f"ST_Read('{path}')" if name in ["GPKG", "Zipped GPKG"] else f"'{path}'"
+    con.sql(f"SELECT count(*) FROM {src}").fetchall()
 
-    if path.endswith(".gpkg"):
-        con.sql(f"SELECT count(*) FROM ST_Read('{path}')").fetchall()
+    elapsed = time.time() - start_time
 
-    elif path.endswith(".zip"):
-        con.sql(f"SELECT count(*) FROM ST_Read('{path}')").fetchall()
+    all_results.append({"Country": country_name, "Format": name, "Test": "Row Count Speed", "Metric": "Seconds", "Value": elapsed})
 
-    else: 
-        con.sql(f"SELECT count(*) FROM '{path}'").fetchall()
-
-    end_time = time.time()
-    print(f"{name:<20} : {end_time - start_time:.25f} seconds.")
-
-"""
-Test 3: File export as CSV
-    - See how long it takes to read every single cell and convert geometry to WKT by exporting it to CSV
-"""
-print()
-print("Test 3: Reading the full file - exporting it as CSV")
-
-output_csv = "benchmark.csv"
-
+# --- TEST 3: EXPORT TO CSV (Reading full file) ---
+print(f"[{country_name}] Test 3: Export to CSV")
+output_csv = f"temp_{code}.csv"
 for name, path in files:
-    if not os.path.exists(path):
+    if not os.path.exists(path): continue
+
+    if country_name == "France" and name == "Zipped GPKG":
+        print(f"   ! Skipping {name} for {country_name} to avoid excessive unzip time.")
         continue
 
-    if path.endswith(".gpkg"):
-        columns = con.sql(f"DESCRIBE SELECT * FROM ST_Read('{path}')").df()['column_name'].tolist()
-
-    elif path.endswith(".zip"):
-        columns = con.sql(f"DESCRIBE SELECT * FROM ST_Read('{path}')").df()['column_name'].tolist()
-
-    else:
-        columns = con.sql(f"DESCRIBE SELECT * FROM '{path}'").df()['column_name'].tolist()
+    if country_name == "Spain" and name == "Zipped GPKG":
+        print(f"   ! Skipping {name} for {country_name} to avoid excessive unzip time.")
+        continue
     
-    if 'geometry' in columns:
-        geo_col = 'geometry'
-    else:
-        geo_col = 'geom'
-
+    geo_col = get_geo_col(name, path)
+    src = f"ST_Read('{path}')" if name in ["GPKG", "Zipped GPKG"] else f"'{path}'"
+    
     start_time = time.time()
 
-    if path.endswith(".gpkg"):
-        con.sql(f"""
-                COPY( 
-                    SELECT
-                        * EXCLUDE {geo_col}, 
-                        ST_AsText({geo_col}) AS wkt 
-                    FROM ST_Read('{path}')
-                ) TO '{output_csv}' WITH (HEADER, DELIMITER ';')
-            """)
-    elif path.endswith(".zip"):
-        con.sql(f"""
-                COPY( 
-                    SELECT
-                        * EXCLUDE {geo_col}, 
-                        ST_AsText({geo_col}) AS wkt 
-                    FROM ST_Read('{path}')
-                ) TO '{output_csv}' WITH (HEADER, DELIMITER ';')
-            """)
-    else:
-        con.sql(f"""
-                COPY(
-                    SELECT
-                        * EXCLUDE {geo_col},
-                        ST_AsText({geo_col}) AS wkt
-                    FROM '{path}'
-                ) TO '{output_csv}' WITH (HEADER, DELIMITER ';')
-        """)
+    con.sql(f"""
+        COPY (SELECT * EXCLUDE {geo_col}, ST_AsText({geo_col}) AS wkt FROM {src}) 
+        TO '{output_csv}' WITH (HEADER, DELIMITER ';')
+    """)
+
+    elapsed = time.time() - start_time
     
-    end_time = time.time()
-    csv_size = os.path.getsize(output_csv) / (1024 * 1024)
+    all_results.append({"Country": country_name, "Format": name, "Test": "CSV Export Speed", "Metric": "Seconds", "Value": elapsed})
 
-    print(f"{name:<20} : {end_time - start_time:.6f} seconds (wrote CSV file of {csv_size:.1f} MB)")
+    if os.path.exists(output_csv): os.remove(output_csv)
 
-    if os.path.exists(output_csv):
-        os.remove(output_csv)
-
-"""
-Test 4: Attribute access
-    - See how long it takes to read only certain attributes, e.g. only get age or height
-    - Use case example: Useful when wanting to visualize the data in graphs on the hosting website
-"""
-print()
-print("Test 4: Attribute access")
-
+# --- TEST 4: ATTRIBUTE ACCESS (Min/Max/Avg) ---
+print(f"[{country_name}] Test 4: Attribute Access")
 for name, path in files:
-    if not os.path.exists(path): 
+    if not os.path.exists(path): continue
+
+    if country_name == "Spain" and name == "Zipped GPKG":
+        print(f"   ! Skipping {name} for {country_name} to avoid excessive unzip time.")
         continue
 
-
-    start_time = time.time()
-
-    # for Cyprus age and type is NULL, so I only did height
-    if path.endswith(".gpkg"):
-        con.sql(f"SELECT min(height), max(height) FROM ST_Read('{path}')").fetchall()
-
-    elif path.endswith(".zip"):
-        con.sql(f"SELECT min(height), max(height) FROM ST_Read('{path}')").fetchall()
-       
-    else:
-        con.sql(f"SELECT min(height), max(height) FROM '{path}'").fetchall()   
-
-    end_time = time.time()
-    print(f"{name:<20} : min-max in {end_time - start_time:.10f} seconds.")
-
-for name, path in files:
-    if not os.path.exists(path): 
+    if country_name == "France" and name == "Zipped GPKG":
+        print(f"   ! Skipping {name} for {country_name} to avoid excessive unzip time.")
         continue
 
+    src = f"ST_Read('{path}')" if name in ["GPKG", "Zipped GPKG"] else f"'{path}'"
+    
+    # Test Min/Max
     start_time = time.time()
 
-    if path.endswith(".gpkg"):
-        con.sql(f"SELECT avg(height) FROM ST_Read('{path}')").fetchall()
+    con.sql(f"SELECT min(height), max(height) FROM {src}").fetchall()
+
+    elapsed = time.time() - start_time
+    all_results.append({"Country": country_name, "Format": name, "Test": "Attr MinMax", "Metric": "Seconds", "Value": elapsed})
     
-    elif path.endswith(".zip"):
-        con.sql(f"SELECT avg(height) FROM ST_Read('{path}')").fetchall()
+    # Test Avg
+    start_time = time.time()
 
-    else:
-        con.sql(f"SELECT avg(height) FROM '{path}'").fetchall()   
+    con.sql(f"SELECT avg(height) FROM {src}").fetchall()
 
-    end_time = time.time()
+    elapsed = time.time() - start_time
+    all_results.append({"Country": country_name, "Format": name, "Test": "Attr Avg", "Metric": "Seconds", "Value": elapsed})
 
-    print(f"{name:<20} : avg in {end_time - start_time:.10f} seconds")
+# --- TEST 5: BBOX FILTERING ---
+print(f"[{country_name}] Test 5: BBox Filtering")
+if os.path.exists(gpkg_file):
+    bounds = con.sql(f"SELECT ST_XMin(geom), ST_YMin(geom), ST_XMax(geom), ST_YMax(geom) FROM (SELECT ST_Extent(geom) AS geom FROM ST_Read('{gpkg_file}'))").fetchone()
+    xmin, ymin, xmax, ymax = bounds
+    
+    for name, path in files:
+        if not os.path.exists(path): continue
 
+        if country_name == "Spain" and name == "Zipped GPKG":
+            print(f"   ! Skipping {name} for {country_name} to avoid excessive unzip time.")
+            continue
 
-"""
-Test 5: BBox filtering
-    - See how long it takes to find data withing a certain bounding box (centered based on the data).
-"""
+        if country_name == "France" and name == "Zipped GPKG":
+            print(f"   ! Skipping {name} for {country_name} to avoid excessive unzip time.")
+            continue
 
-print()
-print("Test 5: BBox filtering")
-
-ref_bbox_file = files[0][1] # Reference file (GPKG)
-if not os.path.exists(ref_bbox_file):
-    print("Reference file missing")
-    exit()
-
-bounds = con.sql(f"""
-    SELECT ST_XMin(geom), ST_YMin(geom), ST_XMax(geom), ST_YMax(geom)
-    FROM (SELECT ST_Extent(geom) AS geom FROM ST_Read('{ref_bbox_file}'))
-""").fetchone()
-
-global_minx, global_miny, global_maxx, global_maxy = bounds
-
-bbox_sizes = [500, 5000, 20000] # 500m, 5km, 20km
-iterations = 10
-
-#make same test scenarios for every file type
-test_scenarios = {}
-
-for size in bbox_sizes:
-    scenarios = []
-    for _ in range(iterations):
-        # ensure the box within bounds by subtracting 'size'
-        rand_x = random.uniform(global_minx, global_maxx - size)
-        rand_y = random.uniform(global_miny, global_maxy - size)
+        geo_col = get_geo_col(name, path)
+        src = f"ST_Read('{path}')" if name in ["GPKG", "Zipped GPKG"] else f"'{path}'"
         
-        box = (rand_x, rand_y, rand_x + size, rand_y + size) #minx, miny, maxx, maxy
-        scenarios.append(box)
-    test_scenarios[size] = scenarios
-
-print(f"Generated {len(bbox_sizes) * iterations} test scenarios.")
-
-for name, path in files:
-    if not os.path.exists(path):
-        continue
-
-    # if path.endswith(".zip"):
-    #     continue
-
-    if path.endswith(".gpkg"):
-        columns = con.sql(f"DESCRIBE SELECT * FROM ST_Read('{path}')").df()['column_name'].tolist()
-
-    elif path.endswith(".zip"):
-        columns = con.sql(f"DESCRIBE SELECT * FROM ST_Read('{path}')").df()['column_name'].tolist()
-
-    else:
-        columns = con.sql(f"DESCRIBE SELECT * FROM '{path}'").df()['column_name'].tolist()
-    
-    if 'geometry' in columns:
-        geo_col = 'geometry'
-    else:
-        geo_col = 'geom'
-
-    # Iterate through pre-defined scenarios:
-    for size, boxes in test_scenarios.items():
-
-        times = []
-
-        for box in boxes:
-            local_minx, local_miny, local_maxx, local_maxy = box
+        for size in [500, 5000, 20000]:
+            times = []
+            reps = 5
+            for _ in range(reps):
+                rx = random.uniform(xmin, xmax - size)
+                ry = random.uniform(ymin, ymax - size)
+                st = time.time()
+                con.sql(f"SELECT count(*) FROM {src} WHERE ST_Intersects({geo_col}, ST_MakeEnvelope({rx}, {ry}, {rx + size}, {ry + size}))").fetchall()
+                times.append(time.time() - st)
             
-            start_time = time.time()
+            all_results.append({"Country": country_name, "Format": name, "Test": "BBox Filtering", "Metric": f"{size}m", "Value": sum(times)/len(times)})
 
-            if path.endswith(".gpkg"):
-                con.sql(f"""
-                    SELECT count(*) FROM ST_Read('{path}')
-                    WHERE ST_Intersects({geo_col}, ST_MakeEnvelope({local_minx}, {local_miny}, {local_maxx}, {local_maxy}))
-                """).fetchall()
-
-            elif path.endswith(".zip"):
-                 con.sql(f"""
-                    SELECT count(*) FROM ST_Read('{path}')
-                    WHERE ST_Intersects({geo_col}, ST_MakeEnvelope({local_minx}, {local_miny}, {local_maxx}, {local_maxy}))
-                """).fetchall()         
-                       
-            else:
-                con.sql(f"""
-                    SELECT count(*) FROM '{path}'
-                    WHERE ST_Intersects({geo_col}, ST_MakeEnvelope({local_minx}, {local_miny}, {local_maxx}, {local_maxy}))
-                """).fetchall()
-            
-            times.append(time.time() - start_time)
-
-        avg_time = sum(times) / len(times)
-        min_time = min(times)
-        max_time = max(times)
-
-        print(f"{name:<20} | Size: {size:<6}m | Avg: {avg_time:.4f} s | (Min: {min_time:.4f} s | Max: {max_time:.4f}) s")
+# Save everything for a specific country
+df = pd.DataFrame(all_results)
+filename = f"benchmark_{country_name}.csv"
+df.to_csv(filename, index=False)
+print(f"\nSuccess! Data for {country_name} saved to {filename}")

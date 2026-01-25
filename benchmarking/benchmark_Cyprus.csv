@@ -1,0 +1,33 @@
+Country,Format,Test,Metric,Value
+Cyprus,GPKG,Storage Size,MB,301.1953125
+Cyprus,Zipped GPKG,Storage Size,MB,142.43188571929932
+Cyprus,GeoParquet,Storage Size,MB,163.67552661895752
+Cyprus,FlatGeobuf,Storage Size,MB,259.39490509033203
+Cyprus,GPKG,Row Count Speed,Seconds,0.468425989151001
+Cyprus,Zipped GPKG,Row Count Speed,Seconds,7.0519280433654785
+Cyprus,GeoParquet,Row Count Speed,Seconds,0.0018911361694335938
+Cyprus,FlatGeobuf,Row Count Speed,Seconds,0.38376593589782715
+Cyprus,GPKG,CSV Export Speed,Seconds,1.5564961433410645
+Cyprus,Zipped GPKG,CSV Export Speed,Seconds,7.106920957565308
+Cyprus,GeoParquet,CSV Export Speed,Seconds,1.5745160579681396
+Cyprus,FlatGeobuf,CSV Export Speed,Seconds,1.8635249137878418
+Cyprus,GPKG,Attr MinMax,Seconds,0.05961871147155762
+Cyprus,GPKG,Attr Avg,Seconds,0.05904793739318848
+Cyprus,Zipped GPKG,Attr MinMax,Seconds,7.049699068069458
+Cyprus,Zipped GPKG,Attr Avg,Seconds,7.075826168060303
+Cyprus,GeoParquet,Attr MinMax,Seconds,0.003345012664794922
+Cyprus,GeoParquet,Attr Avg,Seconds,0.001024007797241211
+Cyprus,FlatGeobuf,Attr MinMax,Seconds,0.38452625274658203
+Cyprus,FlatGeobuf,Attr Avg,Seconds,0.3802340030670166
+Cyprus,GPKG,BBox Filtering,500m,0.1490480422973633
+Cyprus,GPKG,BBox Filtering,5000m,0.1479175090789795
+Cyprus,GPKG,BBox Filtering,20000m,0.14860949516296387
+Cyprus,Zipped GPKG,BBox Filtering,500m,7.107229948043823
+Cyprus,Zipped GPKG,BBox Filtering,5000m,7.213836431503296
+Cyprus,Zipped GPKG,BBox Filtering,20000m,7.31873631477356
+Cyprus,GeoParquet,BBox Filtering,500m,0.2364896297454834
+Cyprus,GeoParquet,BBox Filtering,5000m,0.23603601455688478
+Cyprus,GeoParquet,BBox Filtering,20000m,0.23598709106445312
+Cyprus,FlatGeobuf,BBox Filtering,500m,0.5289628982543946
+Cyprus,FlatGeobuf,BBox Filtering,5000m,0.5305236339569092
+Cyprus,FlatGeobuf,BBox Filtering,20000m,0.5303874492645264

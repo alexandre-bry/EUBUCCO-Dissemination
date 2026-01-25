@@ -1,0 +1,26 @@
+Country,Format,Test,Metric,Value
+France,GPKG,Storage Size,MB,15245.79296875
+France,Zipped GPKG,Storage Size,MB,5851.859958648682
+France,GeoParquet,Storage Size,MB,5284.106524467468
+France,FlatGeobuf,Storage Size,MB,14701.505180358887
+France,GPKG,Row Count Speed,Seconds,7.443384170532227
+France,GeoParquet,Row Count Speed,Seconds,0.0014650821685791016
+France,FlatGeobuf,Row Count Speed,Seconds,37.83700513839722
+France,GPKG,CSV Export Speed,Seconds,65.25768685340881
+France,GeoParquet,CSV Export Speed,Seconds,77.27687883377075
+France,FlatGeobuf,CSV Export Speed,Seconds,110.39101386070251
+France,GPKG,Attr MinMax,Seconds,16.413487195968628
+France,GPKG,Attr Avg,Seconds,15.920165061950684
+France,GeoParquet,Attr MinMax,Seconds,0.048417091369628906
+France,GeoParquet,Attr Avg,Seconds,0.01698589324951172
+France,FlatGeobuf,Attr MinMax,Seconds,43.26686692237854
+France,FlatGeobuf,Attr Avg,Seconds,44.22300386428833
+France,GPKG,BBox Filtering,500m,13.42066855430603
+France,GPKG,BBox Filtering,5000m,11.831820487976074
+France,GPKG,BBox Filtering,20000m,11.743102550506592
+France,GeoParquet,BBox Filtering,500m,3.282476472854614
+France,GeoParquet,BBox Filtering,5000m,3.303238534927368
+France,GeoParquet,BBox Filtering,20000m,3.2856420040130616
+France,FlatGeobuf,BBox Filtering,500m,53.08861222267151
+France,FlatGeobuf,BBox Filtering,5000m,52.30611958503723
+France,FlatGeobuf,BBox Filtering,20000m,52.02404556274414

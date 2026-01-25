@@ -1,0 +1,26 @@
+Country,Format,Test,Metric,Value
+Spain,GPKG,Storage Size,MB,6555.640625
+Spain,Zipped GPKG,Storage Size,MB,2631.2185039520264
+Spain,GeoParquet,Storage Size,MB,2577.4674196243286
+Spain,FlatGeobuf,Storage Size,MB,6361.328971862793
+Spain,GPKG,Row Count Speed,Seconds,9.401917934417725
+Spain,GeoParquet,Row Count Speed,Seconds,0.0010409355163574219
+Spain,FlatGeobuf,Row Count Speed,Seconds,13.62987494468689
+Spain,GPKG,CSV Export Speed,Seconds,31.001672983169556
+Spain,GeoParquet,CSV Export Speed,Seconds,16.829167127609253
+Spain,FlatGeobuf,CSV Export Speed,Seconds,44.48307991027832
+Spain,GPKG,Attr MinMax,Seconds,9.606703996658325
+Spain,GPKG,Attr Avg,Seconds,1.376054048538208
+Spain,GeoParquet,Attr MinMax,Seconds,0.019646883010864258
+Spain,GeoParquet,Attr Avg,Seconds,0.00842595100402832
+Spain,FlatGeobuf,Attr MinMax,Seconds,13.978547096252441
+Spain,FlatGeobuf,Attr Avg,Seconds,13.803076982498169
+Spain,GPKG,BBox Filtering,500m,3.8692280769348146
+Spain,GPKG,BBox Filtering,5000m,3.871122360229492
+Spain,GPKG,BBox Filtering,20000m,3.8934241771697997
+Spain,GeoParquet,BBox Filtering,500m,1.4521802425384522
+Spain,GeoParquet,BBox Filtering,5000m,1.456041431427002
+Spain,GeoParquet,BBox Filtering,20000m,1.4531506538391112
+Spain,FlatGeobuf,BBox Filtering,500m,17.9266948223114
+Spain,FlatGeobuf,BBox Filtering,5000m,17.72400884628296
+Spain,FlatGeobuf,BBox Filtering,20000m,17.640706872940065
