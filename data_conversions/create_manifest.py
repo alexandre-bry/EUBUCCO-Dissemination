@@ -4,8 +4,11 @@ import re
 from botocore.exceptions import ClientError, EndpointConnectionError
 from dotenv import dotenv_values
 
+"""
+Creates the manifest of all the GeoParquet files in the H3 partition.
+"""
+
 # --- CONFIGURATION ---
-# We use the base endpoint for the connection, and specify the bucket later
 S3_ENDPOINT = "https://fsn1.your-objectstorage.com"
 BUCKET_NAME = "eubuccodissemination"
 PREFIX = "parquet-h3/"  # The folder to scan
@@ -15,12 +18,12 @@ config = dotenv_values(".env")
 
 # Check if keys exist before proceeding
 if not config.get('ACCESS_KEY') or not config.get('SECRET_KEY'):
-    print("❌ Error: ACCESS_KEY or SECRET_KEY not found in .env file.")
+    print("Error: ACCESS_KEY or SECRET_KEY not found in .env file.")
     exit(1)
 
-print("🔑 Keys loaded successfully.")
+print("Keys loaded successfully.")
 
-# Initialize S3 Client (Groupmate's style)
+# Initialize S3 Client
 client = boto3.client(
     "s3",
     endpoint_url=S3_ENDPOINT,
@@ -29,7 +32,7 @@ client = boto3.client(
 )
 
 def generate_manifest():
-    print(f"\n--- 📂 Scanning bucket: {BUCKET_NAME} for H3 cells ---")
+    print(f"\n--- Scanning bucket: {BUCKET_NAME} for H3 cells ---")
     
     found_cells = set()
     
@@ -62,17 +65,15 @@ def generate_manifest():
         with open('manifest.json', 'w') as f:
             json.dump(final_list, f)
 
-        print(f"\n✅ SUCCESS: Found {len(final_list)} unique H3 cells.")
-        print("📄 'manifest.json' has been created in this folder.")
-        print("👉 Next step: Upload 'manifest.json' to the root of your Hetzner bucket.")
+        print("'manifest.json' has been created in this folder.")
 
     except EndpointConnectionError:
-        print("❌ Endpoint does not exist or is unreachable")
+        print("Endpoint does not exist or is unreachable")
     except ClientError as e:
-        print("⚠️ Endpoint reachable, but access denied or restricted")
+        print("Endpoint reachable, but access denied or restricted")
         print(e)
     except Exception as e:
-        print(f"❌ Unexpected error: {e}")
+        print(f"Unexpected error: {e}")
 
 if __name__ == "__main__":
     generate_manifest()

@@ -4,7 +4,7 @@ from dotenv import dotenv_values
 from botocore.exceptions import NoCredentialsError
 
 """
-Creates the manifest of all the GeoParquet files in the H3 partition.
+Uploads the manifest of all the GeoParquet files in the H3 partition to the S3 bucket.
 """
 
 
@@ -17,7 +17,7 @@ FILE_NAME = "manifest.json"
 config = dotenv_values(".env")
 
 if not config.get('ACCESS_KEY') or not config.get('SECRET_KEY'):
-    print("❌ Error: Keys not found in .env file.")
+    print("Error: Keys not found in .env file.")
     exit(1)
 
 # Initialize Client
@@ -31,23 +31,21 @@ def upload_file():
     print(f"🚀 Uploading {FILE_NAME} to bucket '{BUCKET_NAME}'...")
     
     try:
-        # Upload the file
-        # ExtraArgs={'ACL': 'public-read'} ensures it's readable by your website
         s3.upload_file(
             FILE_NAME, 
             BUCKET_NAME, 
             FILE_NAME, 
             ExtraArgs={'ContentType': 'application/json', 'ACL': 'public-read'}
         )
-        print("✅ Upload Successful!")
-        print(f"🌍 File is available at: https://{BUCKET_NAME}.fsn1.your-objectstorage.com/{FILE_NAME}")
+        print("Upload Successful!")
+        print(f"File is available at: https://{BUCKET_NAME}.fsn1.your-objectstorage.com/{FILE_NAME}")
     
     except FileNotFoundError:
-        print(f"❌ Error: The file '{FILE_NAME}' was not found in this folder.")
+        print(f"Error: The file '{FILE_NAME}' was not found in this folder.")
     except NoCredentialsError:
-        print("❌ Error: Credentials not available.")
+        print("Error: Credentials not available.")
     except Exception as e:
-        print(f"❌ Upload failed: {e}")
+        print(f"Upload failed: {e}")
 
 if __name__ == "__main__":
     upload_file()
