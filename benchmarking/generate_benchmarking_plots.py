@@ -87,7 +87,7 @@ for ax in g5.axes.flat:
 g5.set_axis_labels("BBox Size (meters)", "Avg Query Time (Seconds) - Log Scale")
 g5.set_titles("{col_name}")
 plt.subplots_adjust(top=0.8)
-g5.fig.suptitle('Test 5: Spatial Query Performance Scaling')
+g5.fig.suptitle('Test 5: Spatial Bbox Filtering Scaling')
 plt.savefig("bench_5_bbox.png", dpi=300, bbox_inches='tight')
 
 print("5 Figures generated: bench_1_size.png to bench_5_bbox.png")
