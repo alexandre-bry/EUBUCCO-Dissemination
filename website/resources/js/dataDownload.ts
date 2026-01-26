@@ -1,5 +1,5 @@
 import * as duckdb from '@duckdb/duckdb-wasm';
-import { polygonToCells } from "h3-js";
+import { polygonToCells, latLngToCell } from "h3-js";
 import duckdb_wasm from '@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm?url';
 import mvp_worker from '@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js?url';
 import duckdb_eh_wasm from '@duckdb/duckdb-wasm/dist/duckdb-eh.wasm?url';
@@ -47,11 +47,30 @@ async function getManifest(): Promise<Set<string>> {
 
 function getH3FilePaths(minLon: number, minLat: number, maxLon: number, maxLat: number): string[] {
     const polygon = [
-        [minLat, minLon], [minLat, maxLon], [maxLat, maxLon], [maxLat, minLon], [minLat, minLon]
+        [minLat, minLon],
+        [minLat, maxLon], 
+        [maxLat, maxLon], 
+        [maxLat, minLon], 
+        [minLat, minLon]
     ];
+
     const cells = polygonToCells(polygon, H3_RESOLUTION);
-    return cells.map(cell => `${S3_H3_PATH}/h3_cell=${cell}/${cell}.parquet`);
+
+    const points = [
+        [minLat, minLon],
+        [minLat, maxLon],
+        [maxLat, minLon],
+        [maxLat, maxLon],
+        [(minLat + maxLat) / 2, (minLon + maxLon) / 2]
+    ];
+
+    const pointCells = points.map(p => latLngToCell(p[0], p[1], H3_RESOLUTION));
+
+    const allUniqueCells = Array.from(new Set([...cells, ...pointCells]));
+
+    return allUniqueCells.map(cell => `${S3_H3_PATH}/h3_cell=${cell}/${cell}.parquet`);
 }
+
 
 async function initDuckDB() {
     if (db) return db;
