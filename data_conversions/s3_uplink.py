@@ -4,6 +4,7 @@ from pathlib import Path
 from botocore.exceptions import ClientError, EndpointConnectionError
 from dotenv import dotenv_values
 import argparse
+import logging
 
 # --- CONFIG --- #
 BUCKET_NAME = 'eubuccodissemination'
@@ -34,6 +35,8 @@ def upload_folder_to_s3(
 
     local_folder = os.path.abspath(local_folder)
 
+    count = 0
+
     for root, _, files in os.walk(local_folder):
         for file in files:
             local_path = os.path.join(root, file)
@@ -48,9 +51,13 @@ def upload_folder_to_s3(
             try:
                 client.upload_file(local_path, bucket_name, s3_key)
                 print(f"Uploaded: {s3_key} to {s3_prefix}")
-            except (ClientError, EndpointConnectionError) as e:
-                print(f"Failed to upload {local_path}: {e}")
+                count += 1
 
+            except (ClientError, EndpointConnectionError) as e:
+                logging.info(f"Failed to upload {local_path}: {e}")
+
+    logging.info(f"Uploaded {count} files to S3.")
+    
 def cli():
     parser = argparse.ArgumentParser(
         description="Upload a local folder to S3 preserving directory structure"
