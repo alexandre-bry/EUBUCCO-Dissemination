@@ -338,14 +338,12 @@ function createPropertiesHTML(properties: Record<string, any>): HTMLElement {
     return propertiesDiv;
 }
 
-const S3_PATH = import.meta.env.PROD
-    ? "https://eubuccodissemination.fsn1.your-objectstorage.com"
-    : "/api";
-
 map.on("load", () => {
     const legend = new LegendControl();
     const styles_control = new BuildingsStyleControl(STYLES, legend);
-    load_pmtiles(S3_PATH + "/all_countries_v3.pmtiles");
+    load_pmtiles(
+        "https://data.source.coop/abry-tudelft/eubucco/pmtiles/all_countries.pmtiles",
+    );
 
     map.addControl(styles_control, "top-left");
     map.addControl(legend, "bottom-left");

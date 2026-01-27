@@ -2,13 +2,14 @@ class Header extends HTMLElement {
     constructor() {
         super();
     }
-    
 
     connectedCallback() {
         // Detect current page to highlight active link
         const currentPath = window.location.pathname;
-        const isMapActive = currentPath.includes("index.html") || currentPath.endsWith("/");
+        const isMapActive =
+            currentPath.includes("index.html") || currentPath.endsWith("/");
         const isDownloadActive = currentPath.includes("data.html");
+        const isAboutActive = currentPath.includes("about.html");
 
         this.innerHTML = `
       <style>
@@ -62,8 +63,9 @@ class Header extends HTMLElement {
       <header>
         <a href="index.html" class="logo">EUBUCCO DISSEMINATION</a>
         <nav>
-            <a href="index.html" class="header-nav-link ${isMapActive ? 'active' : ''}">Map</a>
-            <a href="data.html" class="header-nav-link ${isDownloadActive ? 'active' : ''}">Download</a>
+            <a href="index.html" class="header-nav-link ${isMapActive ? "active" : ""}">Map</a>
+            <a href="data.html" class="header-nav-link ${isDownloadActive ? "active" : ""}">Download</a>
+            <a href="about.html" class="header-nav-link ${isAboutActive ? "active" : ""}">About</a>
         </nav>
       </header>
     `;

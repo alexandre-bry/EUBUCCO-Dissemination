@@ -1,33 +1,70 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
     <head>
         <meta charset="UTF-8" />
-        <link rel="icon" type="image/svg+xml" href="https://eubuccodissemination.fsn1.your-objectstorage.com/icons/Eubucco-icon.jpg" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>About - EUBUCCO Dissemination</title>
+        <link rel="icon" type="image/svg+xml" href="Eubucco-icon.jpg" />
+
         <link rel="stylesheet" href="resources/css/styles.css" />
+
         <script src="resources/js/header.ts" type="module" defer></script>
         <script src="resources/js/footer.ts" type="module" defer></script>
     </head>
     <body>
         <header-component></header-component>
-        
-        <div class="content about-page">
+
+        <main class="content">
             <section>
                 <h1>What is EUBUCCO?</h1>
                 <p>
-                    EUBUCCO is a scientific database of individual building footprints for over 200 million buildings across the 27 European Union countries and Switzerland. 
-                    It harmonizes 50 open government datasets and OpenStreetMap data to provide a common platform for urban sustainability studies.
+                    EUBUCCO is a scientific database of individual building
+                    footprints for over 200 million buildings across the 27
+                    European Union countries and Switzerland. It harmonizes 50
+                    open government datasets and OpenStreetMap data to provide a
+                    common platform for urban sustainability studies.
                 </p>
                 <p>
-                    The database focuses on three main attributes critical for climate policy: Building Type, Height, and Construction Year.
+                    The database focuses on three main attributes critical for
+                    climate policy: Building Type, Height, and Construction
+                    Year.
                 </p>
             </section>
 
             <section class="highlight-box">
                 <h2>Our Cloud-Optimized Version</h2>
                 <p>
-                    While the original EUBUCCO project provides data in formats like GPKG and CSV, this website provides Cloud-Optimized version of data. This was executed as part of the course GEO5019 for Master of Geomatics students from Delft University of Technology.
+                    While the original EUBUCCO project provides data in formats
+                    like GPKG and CSV, this website provides Cloud-Optimized
+                    version of data. This was executed as part of the course
+                    GEO5019 for Master of Geomatics students from Delft
+                    University of Technology. The source code is available on
+                    <a
+                        href="https://github.com/alexandre-bry/EUBUCCO-Dissemination"
+                        target="_blank"
+                        >GitHub</a
+                    >.
+                </p>
+            </section>
+
+            <section>
+                <h2>Hosting the Data</h2>
+                <p>
+                    The data is hosted by
+                    <a href="https://source.coop/" target="_blank"
+                        >Source Cooperative</a
+                    >
+                    and is available at
+                    <a
+                        href="https://source.coop/abry-tudelft/eubucco"
+                        target="_blank"
+                        >this link</a
+                    >. Source Cooperative is the data publishing utility for the
+                    web, allowing trusted organizations and individuals to
+                    publish data of any kind at any scale. It is maintained by
+                    <a href="https://radiant.earth/" target="_blank"
+                        >Radiant Earth</a
+                    >.
                 </p>
             </section>
 
@@ -35,21 +72,28 @@
                 <h2>Credits & Citations</h2>
                 <p>
                     This work is based on the data and research from:
-                    <br><em>Milojevic-Dupont, N., Wagner, F., et al. (2023). EUBUCCO v0.1: European building stock characteristics in a common and open database for 200+ million individual buildings. Sci Data 10, 147.</em>
+                    <br /><em
+                        >Milojevic-Dupont, N., Wagner, F., et al. (2023).
+                        EUBUCCO v0.1: European building stock characteristics in
+                        a common and open database for 200+ million individual
+                        buildings. Sci Data 10, 147.</em
+                    >
                 </p>
                 <p>
-                    Visit the official project at <a href="https://eubucco.com/" target="_blank">eubucco.com</a>.
+                    Visit the official project at
+                    <a href="https://eubucco.com/" target="_blank"
+                        >eubucco.com</a
+                    >.
                 </p>
             </section>
 
             <section class="footer-note">
-                <hr>
+                <hr />
                 <p>
-                    Website icon by Nicolas Huet / Jean Gabriel Prêtre - Public Domain.
+                    Website icon by Nicolas Huet / Jean Gabriel Prêtre - Public
+                    Domain.
                 </p>
             </section>
-        </div>
-        
-        <footer-component></footer-component>
+        </main>
     </body>
 </html>

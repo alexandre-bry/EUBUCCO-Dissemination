@@ -1,28 +1,51 @@
-import * as duckdb from '@duckdb/duckdb-wasm';
+import * as duckdb from "@duckdb/duckdb-wasm";
 import { polygonToCells, latLngToCell } from "h3-js";
-import duckdb_wasm from '@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm?url';
-import mvp_worker from '@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js?url';
-import duckdb_eh_wasm from '@duckdb/duckdb-wasm/dist/duckdb-eh.wasm?url';
-import eh_worker from '@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url';
-import maplibregl from 'maplibre-gl';
-import MapboxDraw from '@mapbox/mapbox-gl-draw';
+import duckdb_wasm from "@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm?url";
+import mvp_worker from "@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js?url";
+import duckdb_eh_wasm from "@duckdb/duckdb-wasm/dist/duckdb-eh.wasm?url";
+import eh_worker from "@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url";
+import maplibregl from "maplibre-gl";
+import MapboxDraw from "@mapbox/mapbox-gl-draw";
 // @ts-ignore
-import DrawRectangle from 'mapbox-gl-draw-rectangle-mode';
+import DrawRectangle from "mapbox-gl-draw-rectangle-mode";
 
 // --- CONFIGURATION ---
-const BUCKET_NAME = "eubuccodissemination";
-const STORAGE_BASE_URL = "https://eubuccodissemination.fsn1.your-objectstorage.com";
-const MANIFEST_URL = `${STORAGE_BASE_URL}/manifest.json`;
-const S3_H3_PATH = `s3://${BUCKET_NAME}/parquet-h3`;
+const BUCKET_NAME = "abry-tudelft/eubucco";
+const STORAGE_BASE_URL = "https://data.source.coop/abry-tudelft/eubucco";
+const S3_FOLDER = "parquet/h3";
+const S3_REGION = "us-west-2";
+const S3_ENDPOINT = "data.source.coop";
+const S3_H3_PATH = `s3://${BUCKET_NAME}/${S3_FOLDER}`;
+const MANIFEST_URL = `${STORAGE_BASE_URL}/${S3_FOLDER}/manifest.json`;
 const H3_RESOLUTION = 4;
 
 const ISO_MAPPING: Record<string, string> = {
-    at: "AUT", be: "BEL", bg: "BGR", hr: "HRV", cy: "CYP",
-    cz: "CZE", dk: "DNK", ee: "EST", fi: "FIN", fr: "FRA",
-    de: "DEU", el: "GRC", hu: "HUN", ie: "IRL", it: "ITA",
-    lv: "LVA", lt: "LTU", lu: "LUX", nl: "NLD", pl: "POL",
-    pt: "PRT", ro: "ROU", sk: "SVK", es: "ESP", se: "SWE",
-    ch: "CHE" 
+    at: "AUT",
+    be: "BEL",
+    bg: "BGR",
+    hr: "HRV",
+    cy: "CYP",
+    cz: "CZE",
+    dk: "DNK",
+    ee: "EST",
+    fi: "FIN",
+    fr: "FRA",
+    de: "DEU",
+    el: "GRC",
+    hu: "HUN",
+    ie: "IRL",
+    it: "ITA",
+    lv: "LVA",
+    lt: "LTU",
+    lu: "LUX",
+    nl: "NLD",
+    pl: "POL",
+    pt: "PRT",
+    ro: "ROU",
+    sk: "SVK",
+    es: "ESP",
+    se: "SWE",
+    ch: "CHE",
 };
 
 // --- CACHING ---
@@ -35,7 +58,8 @@ async function getManifest(): Promise<Set<string>> {
     if (MANIFEST_CACHE) return MANIFEST_CACHE;
     try {
         const response = await fetch(MANIFEST_URL);
-        if (!response.ok) throw new Error(`Manifest fetch failed: ${response.status}`);
+        if (!response.ok)
+            throw new Error(`Manifest fetch failed: ${response.status}`);
         const cells = await response.json();
         MANIFEST_CACHE = new Set(cells);
         return MANIFEST_CACHE;
@@ -45,13 +69,18 @@ async function getManifest(): Promise<Set<string>> {
     }
 }
 
-function getH3FilePaths(minLon: number, minLat: number, maxLon: number, maxLat: number): string[] {
+function getH3FilePaths(
+    minLon: number,
+    minLat: number,
+    maxLon: number,
+    maxLat: number,
+): string[] {
     const polygon = [
         [minLat, minLon],
-        [minLat, maxLon], 
-        [maxLat, maxLon], 
-        [maxLat, minLon], 
-        [minLat, minLon]
+        [minLat, maxLon],
+        [maxLat, maxLon],
+        [maxLat, minLon],
+        [minLat, minLon],
     ];
 
     const cells = polygonToCells(polygon, H3_RESOLUTION);
@@ -61,22 +90,25 @@ function getH3FilePaths(minLon: number, minLat: number, maxLon: number, maxLat: 
         [minLat, maxLon],
         [maxLat, minLon],
         [maxLat, maxLon],
-        [(minLat + maxLat) / 2, (minLon + maxLon) / 2]
+        [(minLat + maxLat) / 2, (minLon + maxLon) / 2],
     ];
 
-    const pointCells = points.map(p => latLngToCell(p[0], p[1], H3_RESOLUTION));
+    const pointCells = points.map((p) =>
+        latLngToCell(p[0], p[1], H3_RESOLUTION),
+    );
 
     const allUniqueCells = Array.from(new Set([...cells, ...pointCells]));
 
-    return allUniqueCells.map(cell => `${S3_H3_PATH}/h3_cell=${cell}/${cell}.parquet`);
+    return allUniqueCells.map(
+        (cell) => `${S3_H3_PATH}/h3_cell=${cell}/${cell}.parquet`,
+    );
 }
-
 
 async function initDuckDB() {
     if (db) return db;
     const bundles: duckdb.DuckDBBundles = {
         mvp: { mainModule: duckdb_wasm, mainWorker: mvp_worker },
-        eh: { mainModule: duckdb_eh_wasm, mainWorker: eh_worker }
+        eh: { mainModule: duckdb_eh_wasm, mainWorker: eh_worker },
     };
     const bundle = await duckdb.selectBundle(bundles);
     const worker = new Worker(bundle.mainWorker!);
@@ -87,17 +119,32 @@ async function initDuckDB() {
 
 // --- MAIN HANDLER ---
 async function handleDownload() {
-    const statusMsg = document.getElementById('status-message') as HTMLElement;
-    const downloadBtn = document.getElementById('download-btn') as HTMLButtonElement;
-    
-    const countryCode = (document.getElementById('country-select') as HTMLSelectElement).value;
-    const format = (document.getElementById('format-select') as HTMLSelectElement).value;
-    const minLonStr = (document.getElementById('min-lon') as HTMLInputElement).value;
-    const minLatStr = (document.getElementById('min-lat') as HTMLInputElement).value;
-    const maxLonStr = (document.getElementById('max-lon') as HTMLInputElement).value;
-    const maxLatStr = (document.getElementById('max-lat') as HTMLInputElement).value;
+    const statusMsg = document.getElementById("status-message") as HTMLElement;
+    const downloadBtn = document.getElementById(
+        "download-btn",
+    ) as HTMLButtonElement;
 
-    const isBBoxSelection = !!(minLonStr && minLatStr && maxLonStr && maxLatStr);
+    const countryCode = (
+        document.getElementById("country-select") as HTMLSelectElement
+    ).value;
+    const format = (
+        document.getElementById("format-select") as HTMLSelectElement
+    ).value;
+    const minLonStr = (document.getElementById("min-lon") as HTMLInputElement)
+        .value;
+    const minLatStr = (document.getElementById("min-lat") as HTMLInputElement)
+        .value;
+    const maxLonStr = (document.getElementById("max-lon") as HTMLInputElement)
+        .value;
+    const maxLatStr = (document.getElementById("max-lat") as HTMLInputElement)
+        .value;
+
+    const isBBoxSelection = !!(
+        minLonStr &&
+        minLatStr &&
+        maxLonStr &&
+        maxLatStr
+    );
 
     if (!countryCode && !isBBoxSelection) {
         alert("Please select a country or enter valid coordinates.");
@@ -109,21 +156,23 @@ async function handleDownload() {
     // --- DIRECT DOWNLOAD (FOR FULL COUNTRIES) ---
     if (countryCode && !isBBoxSelection) {
         const iso3 = ISO_MAPPING[countryCode];
-        const extension = format === 'geoparquet' ? 'parquet' : 'fgb';
-        const folder = format === 'geoparquet' ? 'partition-country' : 'partition-country-fgb';
-        
+        const extension = format === "geoparquet" ? "parquet" : "fgb";
+        const folder =
+            format === "geoparquet" ? "parquet/country" : "flatgeobuf/country";
+
         statusMsg.innerText = `Redirecting to full ${iso3} file...`;
-        
+
         const directUrl = `${STORAGE_BASE_URL}/${folder}/${iso3}.${extension}`;
-        
-        const link = document.createElement('a');
+
+        const link = document.createElement("a");
         link.href = directUrl;
         link.download = `eubucco_${iso3}.${extension}`;
         link.click();
-        
-        statusMsg.innerText = "Download started, the file will be downloaded soon!";
+
+        statusMsg.innerText =
+            "Download started, the file will be downloaded soon!";
         downloadBtn.disabled = false;
-        return; 
+        return;
     }
 
     // --- DUCKDB PROCESSING DOWNLOAD (FOR BBOX) ---
@@ -137,9 +186,9 @@ async function handleDownload() {
         await conn.query(`
             INSTALL httpfs; LOAD httpfs;
             INSTALL spatial; LOAD spatial;
-            SET s3_endpoint = 'fsn1.your-objectstorage.com'; 
+            SET s3_endpoint = '${S3_ENDPOINT}'; 
             SET s3_url_style = 'path';
-            SET s3_region = 'fsn1';
+            SET s3_region = '${S3_REGION}';
             SET s3_use_ssl = true;
             SET threads = 1;            
             SET max_memory = '1 GB';
@@ -152,28 +201,38 @@ async function handleDownload() {
         const nMaxLat = parseFloat(maxLatStr);
 
         statusMsg.innerText = "Finding data cells...";
-        const theoreticalFiles = getH3FilePaths(nMinLon, nMinLat, nMaxLon, nMaxLat);
+        const theoreticalFiles = getH3FilePaths(
+            nMinLon,
+            nMinLat,
+            nMaxLon,
+            nMaxLat,
+        );
         const validCells = await getManifest();
-        const validFileList = theoreticalFiles.filter(path => {
-            const cellId = path.split("h3_cell=")[1].split("/")[0].toLowerCase();
+        const validFileList = theoreticalFiles.filter((path) => {
+            const cellId = path
+                .split("h3_cell=")[1]
+                .split("/")[0]
+                .toLowerCase();
             return validCells.has(cellId);
         });
 
         if (validFileList.length === 0) {
             statusMsg.innerText = "No building data found in this region.";
             downloadBtn.disabled = false;
-            return; 
+            return;
         }
 
         if (validFileList.length > 200) {
-            alert(`Area too large (${validFileList.length} cells). Please choose a smaller bbox or download the whole country.`);
+            alert(
+                `Area too large (${validFileList.length} cells). Please choose a smaller bbox or download the whole country.`,
+            );
             downloadBtn.disabled = false;
             return;
         }
 
         statusMsg.innerText = "Checking the number of buildings...";
 
-        const fileListSQL = validFileList.map(f => `'${f}'`).join(", ");
+        const fileListSQL = validFileList.map((f) => `'${f}'`).join(", ");
 
         const outputFilename = `eubucco_custom.geoparquet`;
         const countResult = await conn.query(`
@@ -189,9 +248,9 @@ async function handleDownload() {
             statusMsg.innerText = "Selection has too many buildings.";
             alert(
                 `Selection area is too large:\n\n` +
-                `You selected approx. ${(totalEstimatedRows / 1_000_000).toFixed(1)} million buildings.\n` +
-                `The browser limit is around ${ROW_LIMIT / 1_000_000} million.\n\n` +
-                `Please zoom in significantly or select a smaller area.`
+                    `You selected approx. ${(totalEstimatedRows / 1_000_000).toFixed(1)} million buildings.\n` +
+                    `The browser limit is around ${ROW_LIMIT / 1_000_000} million.\n\n` +
+                    `Please zoom in significantly or select a smaller area.`,
             );
             downloadBtn.disabled = false;
             return;
@@ -204,38 +263,41 @@ async function handleDownload() {
             )
         `;
 
-        statusMsg.innerText = "Extracting buildings (this may take a minute)...";
+        statusMsg.innerText =
+            "Extracting buildings (this may take a minute)...";
 
-        await conn.query(`COPY (${query}) TO '${outputFilename}' (FORMAT PARQUET)`);
+        await conn.query(
+            `COPY (${query}) TO '${outputFilename}' (FORMAT PARQUET)`,
+        );
 
         statusMsg.innerText = "Preparing file...";
         const buffer = await db.copyFileToBuffer(outputFilename);
-        
+
         // Delete the file from DuckDB memory when we have the JS buffer
         await db.dropFile(outputFilename);
 
-        const blob = new Blob([buffer as any], { type: 'application/octet-stream' });
+        const blob = new Blob([buffer as any], {
+            type: "application/octet-stream",
+        });
         const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
+        const link = document.createElement("a");
         link.href = url;
         link.download = outputFilename;
         link.click();
-        
+
         setTimeout(() => URL.revokeObjectURL(url), 100);
         statusMsg.innerText = "Download complete!";
-
     } catch (err: any) {
         statusMsg.innerText = "Error: " + err.message;
         console.error("Download error:", err);
 
         try {
             if (db && outputFilename) {
-                await db.dropFile(outputFilename).catch(() => {}); 
+                await db.dropFile(outputFilename).catch(() => {});
             }
         } catch (cleanupErr) {
             console.warn("Cleanup failed:", cleanupErr);
         }
-
     } finally {
         if (conn) await conn.close();
         downloadBtn.disabled = false;
@@ -248,18 +310,18 @@ let draw: MapboxDraw;
 
 function initMap() {
     map = new maplibregl.Map({
-        container: 'map',
-        style: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json", 
+        container: "map",
+        style: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
         center: [15, 50],
-        zoom: 3
+        zoom: 3,
     });
 
     draw = new MapboxDraw({
         displayControlsDefault: false,
         modes: {
             ...MapboxDraw.modes,
-            'draw_rectangle': DrawRectangle
-        }
+            draw_rectangle: DrawRectangle,
+        },
     });
 
     map.addControl(draw as any);
@@ -271,39 +333,48 @@ function initMap() {
             const lons = coords.map((p: any) => p[0]);
             const lats = coords.map((p: any) => p[1]);
 
-            (document.getElementById('min-lon') as HTMLInputElement).value = Math.min(...lons).toFixed(4);
-            (document.getElementById('max-lon') as HTMLInputElement).value = Math.max(...lons).toFixed(4);
-            (document.getElementById('min-lat') as HTMLInputElement).value = Math.min(...lats).toFixed(4);
-            (document.getElementById('max-lat') as HTMLInputElement).value = Math.max(...lats).toFixed(4);
+            (document.getElementById("min-lon") as HTMLInputElement).value =
+                Math.min(...lons).toFixed(4);
+            (document.getElementById("max-lon") as HTMLInputElement).value =
+                Math.max(...lons).toFixed(4);
+            (document.getElementById("min-lat") as HTMLInputElement).value =
+                Math.min(...lats).toFixed(4);
+            (document.getElementById("max-lat") as HTMLInputElement).value =
+                Math.max(...lats).toFixed(4);
 
             // Manually trigger the input event so existing exclusivity logic runs
-            document.getElementById('min-lon')?.dispatchEvent(new Event('input'));
+            document
+                .getElementById("min-lon")
+                ?.dispatchEvent(new Event("input"));
         }
     };
 
-    map.on('draw.create', () => {
-            updateInputsFromMap();
-            
-            // the "drawing" state to end
-            setTimeout(() => {
-                draw.changeMode('simple_select');
-            }, 0);
+    map.on("draw.create", () => {
+        updateInputsFromMap();
 
-            const drawBtn = document.getElementById('draw-bbox-btn');
-            if (drawBtn) {
-                drawBtn.classList.remove('active');
-                drawBtn.innerText = "Draw Rectangle"; 
-            }
-        });
+        // the "drawing" state to end
+        setTimeout(() => {
+            draw.changeMode("simple_select");
+        }, 0);
 
-        // Update if the user drags the finished rectangle
-        map.on('draw.update', updateInputsFromMap);
-    }
+        const drawBtn = document.getElementById("draw-bbox-btn");
+        if (drawBtn) {
+            drawBtn.classList.remove("active");
+            drawBtn.innerText = "Draw Rectangle";
+        }
+    });
 
+    // Update if the user drags the finished rectangle
+    map.on("draw.update", updateInputsFromMap);
+}
 
 // --- BUTTONS AND ACTION STUFF ---
-const formatSelect = document.getElementById('format-select') as HTMLSelectElement;
-const fgbOption = formatSelect.querySelector('option[value="fgb"]') as HTMLOptionElement;
+const formatSelect = document.getElementById(
+    "format-select",
+) as HTMLSelectElement;
+const fgbOption = formatSelect.querySelector(
+    'option[value="fgb"]',
+) as HTMLOptionElement;
 
 // Helper to restrict format based on selection type
 function updateFormatVisibility(isBBoxActive: boolean) {
@@ -318,34 +389,34 @@ function updateFormatVisibility(isBBoxActive: boolean) {
     }
 }
 
-document.getElementById('draw-bbox-btn')?.addEventListener('click', (e) => {
+document.getElementById("draw-bbox-btn")?.addEventListener("click", (e) => {
     const btn = e.currentTarget as HTMLButtonElement;
-    
+
     // If we are already drawing, clicking again cancels it
-    if (btn.classList.contains('active')) {
-        draw.changeMode('simple_select');
-        btn.classList.remove('active');
+    if (btn.classList.contains("active")) {
+        draw.changeMode("simple_select");
+        btn.classList.remove("active");
         btn.innerText = "Draw Rectangle";
     } else {
         draw.deleteAll();
-        draw.changeMode('draw_rectangle');
-        btn.classList.add('active');
+        draw.changeMode("draw_rectangle");
+        btn.classList.add("active");
         btn.innerText = "Click 2 points on map";
     }
 });
 
-document.getElementById('clear-bbox-btn')?.addEventListener('click', () => {
+document.getElementById("clear-bbox-btn")?.addEventListener("click", () => {
     draw.deleteAll();
-    bboxInputs.forEach(input => {
+    bboxInputs.forEach((input) => {
         input.value = "";
         input.disabled = false;
-        input.parentElement?.classList.remove('disabled-opacity');
+        input.parentElement?.classList.remove("disabled-opacity");
     });
     countrySelect.disabled = false;
-    
-    const drawBtn = document.getElementById('draw-bbox-btn');
+
+    const drawBtn = document.getElementById("draw-bbox-btn");
     if (drawBtn) {
-        drawBtn.classList.remove('active');
+        drawBtn.classList.remove("active");
         drawBtn.innerText = "Draw Rectangle";
     }
 
@@ -356,20 +427,24 @@ document.getElementById('clear-bbox-btn')?.addEventListener('click', () => {
 // Initialize map on load
 initMap();
 
-document.getElementById('download-btn')?.addEventListener('click', handleDownload);
+document
+    .getElementById("download-btn")
+    ?.addEventListener("click", handleDownload);
 
-const countrySelect = document.getElementById('country-select') as HTMLSelectElement;
+const countrySelect = document.getElementById(
+    "country-select",
+) as HTMLSelectElement;
 const bboxInputs = [
-    document.getElementById('min-lon') as HTMLInputElement,
-    document.getElementById('min-lat') as HTMLInputElement,
-    document.getElementById('max-lon') as HTMLInputElement,
-    document.getElementById('max-lat') as HTMLInputElement
+    document.getElementById("min-lon") as HTMLInputElement,
+    document.getElementById("min-lat") as HTMLInputElement,
+    document.getElementById("max-lon") as HTMLInputElement,
+    document.getElementById("max-lat") as HTMLInputElement,
 ];
 
-// Handle BBox input 
-bboxInputs.forEach(input => {
-    input.addEventListener('input', () => {
-        const hasBBoxValue = bboxInputs.some(i => i.value.trim() !== "");
+// Handle BBox input
+bboxInputs.forEach((input) => {
+    input.addEventListener("input", () => {
+        const hasBBoxValue = bboxInputs.some((i) => i.value.trim() !== "");
         if (hasBBoxValue) {
             countrySelect.value = "";
             countrySelect.disabled = true;
@@ -385,22 +460,21 @@ bboxInputs.forEach(input => {
 });
 
 // Handle Country Selection
-countrySelect.addEventListener('change', () => {
+countrySelect.addEventListener("change", () => {
     if (countrySelect.value !== "") {
-        bboxInputs.forEach(input => {
+        bboxInputs.forEach((input) => {
             input.value = "";
             input.disabled = true;
-            input.parentElement?.classList.add('disabled-opacity');
+            input.parentElement?.classList.add("disabled-opacity");
         });
         if (draw) draw.deleteAll();
-        
+
         // Country selection allows FlatGeobuf
         updateFormatVisibility(false);
     } else {
-        bboxInputs.forEach(input => {
+        bboxInputs.forEach((input) => {
             input.disabled = false;
-            input.parentElement?.classList.remove('disabled-opacity');
+            input.parentElement?.classList.remove("disabled-opacity");
         });
     }
 });
-
