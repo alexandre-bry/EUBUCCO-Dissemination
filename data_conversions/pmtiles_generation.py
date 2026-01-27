@@ -736,13 +736,15 @@ def convert_files_to_one_pmtiles(
         layer,
         # "--coalesce-densest-as-needed",
         # "--drop-smallest-as-needed",
-        "--drop-densest-as-needed",
+        # "--drop-densest-as-needed",
         "--include=height",
         "--include=age",
         "--include=type",
-        "--simplification=10",
+        "--simplification=5",
+        "--no-clipping",
         "--no-feature-limit",
-        f"-M {1_500_000}",
+        # f"-M {1_500_000}",
+        "--no-tile-size-limit",
         *input_paths_str,
     ]
 
