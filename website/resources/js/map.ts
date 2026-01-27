@@ -345,7 +345,7 @@ const S3_PATH = import.meta.env.PROD
 map.on("load", () => {
     const legend = new LegendControl();
     const styles_control = new BuildingsStyleControl(STYLES, legend);
-    load_pmtiles(S3_PATH + "/all_countries_new_new.pmtiles");
+    load_pmtiles(S3_PATH + "/all_countries_v3.pmtiles");
 
     map.addControl(styles_control, "top-left");
     map.addControl(legend, "bottom-left");
