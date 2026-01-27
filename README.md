@@ -3,7 +3,10 @@
 Group project as part of the GEO5019-2025 course at TU Delft.
 The goal of this project is to make accessing the [EUBUCCO dataset](https://eubucco.com/data/) quicker and more customizable, both in terms of download and visualization.
 
-The website is available at <https://alexandre-bry.github.io/EUBUCCO-Dissemination/>.
+A few useful links:
+
+- Website: <https://alexandre-bry.github.io/EUBUCCO-Dissemination/>
+- Data: <https://source.coop/abry-tudelft/eubucco>
 
 ## Installation
 
