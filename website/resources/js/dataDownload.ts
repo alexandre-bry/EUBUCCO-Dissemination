@@ -234,7 +234,7 @@ async function handleDownload() {
 
         const fileListSQL = validFileList.map((f) => `'${f}'`).join(", ");
 
-        const outputFilename = `eubucco_custom.geoparquet`;
+        const outputFilename = `eubucco_custom.parquet`;
         const countResult = await conn.query(`
             SELECT SUM(num_values) as total_rows 
             FROM parquet_metadata([${fileListSQL}])
