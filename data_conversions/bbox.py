@@ -12,6 +12,7 @@ from pathlib import Path
 import h3
 from shapely.geometry import box
 import duckdb
+import time
 
 # Internal
 from dotenv import dotenv_values
@@ -175,15 +176,16 @@ def retrieve_from_s3(keys: list[str], bbox: list):
     long_min, lat_min, long_max, lat_max = bbox
 
     query = (f"""
+            COPY (
             SELECT *
             FROM read_parquet([{sql_array}])
             WHERE ST_Intersects(
             geometry,
             ST_MakeEnvelope({long_min}, {lat_min},
                              {long_max}, {lat_max})
-            );
-
-
+            )
+            ) TO 'buildings.parquet'
+            (FORMAT PARQUET);
             """)
     
     print(query)
@@ -205,14 +207,13 @@ def main():
         bbox_codes = bbox_to_country_code(bbox)
 
         # Retrieve & time
+        start_time = time.time()
         retrieve_from_s3(keys = bbox_codes,
                          bbox = bbox)
+        
+        end_time = time.time()
+        print(f'Query took {end_time - start_time} s.')
         # 2. By h3
 
 if __name__ == '__main__':
-    #main()
-
-    bboxes = generate_bbox_set()[0]
-
-    bbox_codes = bbox_to_country_code(bboxes)
-    print(bbox_codes)
+    main()
