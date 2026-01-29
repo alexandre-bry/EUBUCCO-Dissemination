@@ -3,13 +3,12 @@ Measuring query performance of h3 and country partitions
 """
 # External
 import boto3
-import botocore
 import pyarrow.parquet as pq
-import shapely.wkb
 import s3fs
 import json
 from pathlib import Path
 import h3
+from h3 import LatLngPoly
 from shapely.geometry import box
 import duckdb
 import time
@@ -38,18 +37,18 @@ with open(path_to_json) as f:
 # DuckDB Setup
 conn = duckdb.connect("benchmark.db")
 conn.execute(f"""
-                    INSTALL httpfs;
-                    LOAD httpfs;
-                    INSTALL spatial;
-                    LOAD spatial;
+            INSTALL httpfs;
+            LOAD httpfs;
+            INSTALL spatial;
+            LOAD spatial;
 
-                    SET s3_endpoint='fsn1.your-objectstorage.com';
-                    SET s3_region='us-east-1';  -- required, even if ignored
-                    SET s3_url_style='path';
-                   
-                    SET s3_access_key_id='{config['ACCESS_KEY']}';
-                    SET s3_secret_access_key='{config['SECRET_KEY']}';
-                   """)
+            SET s3_endpoint='fsn1.your-objectstorage.com';
+            SET s3_region='us-east-1';  -- required, even if ignored
+            SET s3_url_style='path';
+            
+            SET s3_access_key_id='{config['ACCESS_KEY']}';
+            SET s3_secret_access_key='{config['SECRET_KEY']}';
+            """)
 #--------------------------------------------------#
 
 # Necessary for setup of workflow
@@ -136,13 +135,35 @@ def bbox_to_country_code(bbox_query:list) -> list:
 def bbox_to_h3_code(bbox:list, resolution : int = 4) -> list:
     """
     Returns list of h3-indices given a bounding box
+    Queries at lower resolution to circumnavigate no-match issue
+    Upscales to target resolution
     
     :param bbox: 
-    :param resolution: h3 res
+    :param resolution: h3 target res
     
     """
-    pass
-    # TODO: convert methods not working yet
+
+    # Convert bbox to h3shape
+    print(f'Gathering h3 for {bbox}')
+
+    longmin, latmin, longmax, latmax = bbox
+    h3_poly = LatLngPoly([
+        (latmin, longmin),
+        (latmin, longmax),
+        (latmax, longmax),
+        (latmax, longmin)
+    ])
+
+    # Generate fine cells first, to alleviate no-match issue
+    h3_cells_res7 = h3.polygon_to_cells(h3_poly, res = 7)
+
+    # Convert to target res
+    h3_cells = {
+        h3.cell_to_parent(cell, resolution)
+        for cell in h3_cells_res7
+    }
+
+    return list(h3_cells)
 
 def generate_bbox_set(num_cat: int = 3, boxes_per_cat: int = 10):
     """
@@ -203,9 +224,14 @@ def main():
 
     # Intersect
     for bbox in bboxes:
+
+        """
         # 1. By country
         bbox_codes = bbox_to_country_code(bbox)
 
+
+
+       
         # Retrieve & time
         start_time = time.time()
         retrieve_from_s3(keys = bbox_codes,
@@ -213,7 +239,9 @@ def main():
         
         end_time = time.time()
         print(f'Query took {end_time - start_time} s.')
+        
+        """
         # 2. By h3
-
+        h3_codes = bbox_to_h3_code(bbox)
 if __name__ == '__main__':
     main()
