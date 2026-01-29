@@ -16,6 +16,7 @@ import time
 import csv
 import random
 import numpy as np
+from tqdm import tqdm
 
 # Internal
 from dotenv import dotenv_values
@@ -53,6 +54,10 @@ conn.execute(f"""
             SET s3_access_key_id='{config['ACCESS_KEY']}';
             SET s3_secret_access_key='{config['SECRET_KEY']}';
             """)
+#--------------------------------------------------#
+# For consistent randomness
+random.seed(42)
+np.random.seed(42)
 #--------------------------------------------------#
 
 # Necessary for setup of workflow
@@ -188,46 +193,17 @@ def filter_h3_keys(h3_keys):
             existing_keys.append(k)
         except client.exceptions.ClientError as e:
             if e.response['Error']['Code'] == '404':
-                print(f"Skipping missing file {k}")
+                print(f"No buildings inside {k}, skipping for query")
             else:
                 raise
     return existing_keys
-
-def generate_bbox_set(num_cat: int = 3, boxes_per_cat: int = 10):
-    """
-    Gernerates a series of bounding boxes at different scales
     
-    :param num_cat: Description
-    :param boxes_per_cat: Description
-    """
-    # Constraining query space to mainland Europe / no water
-    latminglob, longminglob = 46.19591,6.13296 # Geneva
-    latmaxglob, longmaxglob = 52.26609,21.06780 # Warsaw
-
-    lat_max_extent = 4 # degrees
-    long_max_extent = 2 # degrees
-    
-    latmin, longmin = 49.590,15.035
-    latmax, longmax = 50.470,17.648
-
-
-
-    # TODO: randomize, seed, categorize, currently only returns one bbox
-    #longmin, latmin, longmax, latmax = -3.78133, 40.35909, -3.65715, 40.44644
-    # 35.05446, 33.24058, 35.26784, 33.45211
-    #16.1773, 48.1894, 16.4467, 48.3216
-    
-    bboxes = []
-
-    bboxes.append([longmin, latmin, longmax, latmax])
-
-    return bboxes
-    
-def generate_bbox_set2(
-    latmin_global, latmax_global, longmin_global, longmax_global,
-    lat_min_size=0.4, lat_max_size=4,
-    long_min_size=0.2, long_max_size=2,
-    n_categories=10, n_per_category=10
+def generate_bbox_set(
+    latmin_global = 46.19591, latmax_global = 52.26609,
+    longmin_global = 6.13296, longmax_global = 21.06780,
+    lat_min_size=0.1, lat_max_size=1,
+    long_min_size=0.1, long_max_size=1,
+    n_categories=10, n_per_category=3
 ):
     """
     Generate bounding boxes of varying sizes with random centers within a global bbox.
@@ -266,6 +242,10 @@ def retrieve_from_s3(keys: list[str], bbox: list):
     """
     Executes the actual performance part of the query
     """
+
+    # Side case: no bdgs for bbox
+    if len(keys) == 0:
+        return 0
 
     print(f'Querying keys {keys} with bounding box {bbox}')
 
@@ -307,8 +287,8 @@ def main():
     # Generate random set of bboxes
     bboxes = generate_bbox_set()
 
-    for i, bbox in enumerate(bboxes):
-        """
+    for i, bbox in tqdm(enumerate(bboxes)):
+
         # 1. By country
         country_keys = bbox_to_country_code(bbox)
         
@@ -332,7 +312,6 @@ def main():
             "num_features" : country_num_features,
             "num_files" : len(country_keys),
         })
-        """
 
 
         # 2. By h3
