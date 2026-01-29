@@ -13,6 +13,9 @@ from h3 import LatLngPoly
 from shapely.geometry import box
 import duckdb
 import time
+import csv
+import random
+import numpy as np
 
 # Internal
 from dotenv import dotenv_values
@@ -173,7 +176,22 @@ def bbox_to_h3_key(bbox:list, resolution : int = 4) -> list:
 
     print(f'Found matching h3-keys: {h3_keys}')
 
-    return h3_keys
+    h3_keys_filtered = filter_h3_keys(h3_keys)
+
+    return h3_keys_filtered
+
+def filter_h3_keys(h3_keys):
+    existing_keys = []
+    for k in h3_keys:
+        try:
+            client.head_object(Bucket=BUCKET_NAME, Key=k)
+            existing_keys.append(k)
+        except client.exceptions.ClientError as e:
+            if e.response['Error']['Code'] == '404':
+                print(f"Skipping missing file {k}")
+            else:
+                raise
+    return existing_keys
 
 def generate_bbox_set(num_cat: int = 3, boxes_per_cat: int = 10):
     """
@@ -182,9 +200,20 @@ def generate_bbox_set(num_cat: int = 3, boxes_per_cat: int = 10):
     :param num_cat: Description
     :param boxes_per_cat: Description
     """
+    # Constraining query space to mainland Europe / no water
+    latminglob, longminglob = 46.19591,6.13296 # Geneva
+    latmaxglob, longmaxglob = 52.26609,21.06780 # Warsaw
+
+    lat_max_extent = 4 # degrees
+    long_max_extent = 2 # degrees
+    
+    latmin, longmin = 49.590,15.035
+    latmax, longmax = 50.470,17.648
+
+
 
     # TODO: randomize, seed, categorize, currently only returns one bbox
-    longmin, latmin, longmax, latmax = -3.78133, 40.35909, -3.65715, 40.44644
+    #longmin, latmin, longmax, latmax = -3.78133, 40.35909, -3.65715, 40.44644
     # 35.05446, 33.24058, 35.26784, 33.45211
     #16.1773, 48.1894, 16.4467, 48.3216
     
@@ -194,6 +223,45 @@ def generate_bbox_set(num_cat: int = 3, boxes_per_cat: int = 10):
 
     return bboxes
     
+def generate_bbox_set2(
+    latmin_global, latmax_global, longmin_global, longmax_global,
+    lat_min_size=0.4, lat_max_size=4,
+    long_min_size=0.2, long_max_size=2,
+    n_categories=10, n_per_category=10
+):
+    """
+    Generate bounding boxes of varying sizes with random centers within a global bbox.
+
+    Returns:
+        List of lists: [[longmin, latmin, longmax, latmax], ...]
+    """
+    bboxes_all = []
+
+    # Linear spacing for lat/lon sizes
+    lat_sizes = np.linspace(lat_min_size, lat_max_size, n_categories)
+    long_sizes = np.linspace(long_min_size, long_max_size, n_categories)
+
+    for lat_size, long_size in zip(lat_sizes, long_sizes):
+        for _ in range(n_per_category):
+            # Compute random center within allowed global bbox minus half-size
+            lat_center_min = latmin_global + lat_size / 2
+            lat_center_max = latmax_global - lat_size / 2
+            long_center_min = longmin_global + long_size / 2
+            long_center_max = longmax_global - long_size / 2
+
+            lat_center = random.uniform(lat_center_min, lat_center_max)
+            long_center = random.uniform(long_center_min, long_center_max)
+
+            # Construct bbox from center + size
+            latmin = lat_center - lat_size / 2
+            latmax = lat_center + lat_size / 2
+            longmin = long_center - long_size / 2
+            longmax = long_center + long_size / 2
+
+            bboxes_all.append([longmin, latmin, longmax, latmax])
+
+    return bboxes_all
+
 def retrieve_from_s3(keys: list[str], bbox: list):
     """
     Executes the actual performance part of the query
@@ -216,7 +284,7 @@ def retrieve_from_s3(keys: list[str], bbox: list):
             )
             """)
 
-    num_features = conn.execute(query).fetchall()
+    num_features = conn.execute(query).fetchall()[0][0]
 
     return num_features
 
@@ -240,7 +308,7 @@ def main():
     bboxes = generate_bbox_set()
 
     for i, bbox in enumerate(bboxes):
-
+        """
         # 1. By country
         country_keys = bbox_to_country_code(bbox)
         
@@ -251,8 +319,22 @@ def main():
         
         country_query_time = time.time() - start_time
         print(f'Query took {country_query_time} s.')
-        
-        
+
+        # Store results
+        benchmark.append({
+            "bbox_id" : i,
+            "longmin" : bbox[0],
+            "latmin" : bbox[1],
+            "longmax" : bbox[2],
+            "latmax" : bbox[3],
+            "method" : 'country',
+            "time" : country_query_time,
+            "num_features" : country_num_features,
+            "num_files" : len(country_keys),
+        })
+        """
+
+
         # 2. By h3
         h3_keys = bbox_to_h3_key(bbox)
 
@@ -262,19 +344,17 @@ def main():
         h3_query_time = time.time() - start_time
         print(f'Query took {h3_query_time} s to deliver.')
 
-        # Store results
+        
         benchmark.append({
             "bbox_id" : i,
             "longmin" : bbox[0],
             "latmin" : bbox[1],
             "longmax" : bbox[2],
             "latmax" : bbox[3],
-            "country_time" : country_query_time,
-            "country_num_features" : country_num_features,
-            "country_num_files" : len(country_keys),
-            "h3_time" : h3_query_time,
-            "h3_num_features" : h3_num_features,
-            "h3_num_files" : len(h3_keys)
+            "method" : 'h3',
+            "time" : h3_query_time,
+            "num_features" : h3_num_features,
+            "num_files" : len(h3_keys)
         })
 
     write_results(result = benchmark,
