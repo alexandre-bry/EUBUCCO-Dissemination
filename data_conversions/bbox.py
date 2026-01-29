@@ -201,9 +201,9 @@ def filter_h3_keys(h3_keys):
 def generate_bbox_set(
     latmin_global = 41.4659, latmax_global = 53.212,
     longmin_global = 15.5542, longmax_global = 23.418,
-    lat_min_size=0.2, lat_max_size=2,
-    long_min_size=0.2, long_max_size=2,
-    n_categories=10, n_per_category=3
+    lat_min_size=0.3, lat_max_size=2,
+    long_min_size=0.3, long_max_size=2,
+    n_categories=10, n_per_category=30
 ):
     """
     Generate bounding boxes of varying sizes with random centers within a global bbox.
