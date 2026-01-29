@@ -9,6 +9,9 @@ import shapely.wkb
 import s3fs
 import json
 from pathlib import Path
+import h3
+from shapely.geometry import box
+import duckdb
 
 # Internal
 from dotenv import dotenv_values
@@ -26,9 +29,33 @@ client = boto3.client(
     aws_secret_access_key=config['SECRET_KEY'],
 )
 #--------------------------------------------------#
+# Load globally
+path_to_json = Path('..', 'data', 'bbox_countries.json')
+with open(path_to_json) as f:
+    bboxes_country = json.load(f)
+#--------------------------------------------------#
+# DuckDB Setup
+conn = duckdb.connect("benchmark.db")
+conn.execute(f"""
+                    INSTALL httpfs;
+                    LOAD httpfs;
+                    INSTALL spatial;
+                    LOAD spatial;
+
+                    SET s3_endpoint='fsn1.your-objectstorage.com';
+                    SET s3_region='us-east-1';  -- required, even if ignored
+                    SET s3_url_style='path';
+                   
+                    SET s3_access_key_id='{config['ACCESS_KEY']}';
+                    SET s3_secret_access_key='{config['SECRET_KEY']}';
+                   """)
+#--------------------------------------------------#
 
 # Necessary for setup of workflow
 def list_all_files_country_files():
+    """
+    Lists all files at a folder location on S3 using folder pagination
+    """
     parquet_files = []
 
     paginator = client.get_paginator("list_objects_v2")
@@ -44,6 +71,9 @@ def list_all_files_country_files():
     return parquet_files
 
 def generate_country_bboxes():
+    """
+    Extracts dict of all bboxes at given location on S3
+    """
     # Get all files at folder location parquet-country
     country_parquet_keys = list_all_files_country_files()
 
@@ -74,23 +104,44 @@ def generate_country_bboxes():
         json.dump(country_bboxes, fp)
 
 
+def bboxes_intersect(bbox1, bbox2):
+# Unpack coordinates for clarity
+    x1_min, y1_min, x1_max, y1_max = bbox1
+    x2_min, y2_min, x2_max, y2_max = bbox2
 
-def bbox_to_country_code(bbox:list) -> list:
+    if x1_max <= x2_min or x2_max <= x1_min:
+        return False
+
+    if y1_max <= y2_min or y2_max <= y1_min:
+        return False
+
+    return True
+
+def bbox_to_country_code(bbox_query:list) -> list:
     """
-    Returns the list of 3-letter country codes given a bounding box 
+    Returns the list of 3-letter country key codes given a bounding box 
     
-    :param bbox: List of coordinates [longmin, latmin, longmax, latmax]
+    :param bbox_query: List of coordinates [longmin, latmin, longmax, latmax]
     """
-    pass
+    codes = []
+    for code, bbox in bboxes_country.items():
+        latmin, longmin, latmax, longmax = bbox
+        
+        if bboxes_intersect(bbox_query, bbox):
+            codes.append(code)
 
-def bbox_to_h3_code(bbox:list) -> list:
+    return codes
+
+def bbox_to_h3_code(bbox:list, resolution : int = 4) -> list:
     """
     Returns list of h3-indices given a bounding box
     
-    :param bbox: Description
+    :param bbox: 
+    :param resolution: h3 res
     
     """
     pass
+    # TODO: convert methods not working yet
 
 def generate_bbox_set(num_cat: int = 3, boxes_per_cat: int = 10):
     """
@@ -99,14 +150,69 @@ def generate_bbox_set(num_cat: int = 3, boxes_per_cat: int = 10):
     :param num_cat: Description
     :param boxes_per_cat: Description
     """
-    pass
 
+    # TODO: randomize, seed, categorize, currently only returns one bbox
+    longmin, latmin, longmax, latmax = -3.78133, 40.35909, -3.65715, 40.44644
+    # 35.05446, 33.24058, 35.26784, 33.45211
+    #16.1773, 48.1894, 16.4467, 48.3216
+    
+    bboxes = []
+
+    bboxes.append([longmin, latmin, longmax, latmax])
+
+    return bboxes
+    
+def retrieve_from_s3(keys: list[str], bbox: list):
+    """
+    Executes the actual performance part of the query
+    """
+
+    print(f'Querying keys {keys} with bounding box {bbox}')
+
+    s3_paths = [f's3://{BUCKET_NAME}/{k}' for k in keys]
+    sql_array = ", ".join([f"'{p}'" for p in s3_paths])
+
+    long_min, lat_min, long_max, lat_max = bbox
+
+    query = (f"""
+            SELECT *
+            FROM read_parquet([{sql_array}])
+            WHERE ST_Intersects(
+            geometry,
+            ST_MakeEnvelope({long_min}, {lat_min},
+                             {long_max}, {lat_max})
+            );
+
+
+            """)
+    
+    print(query)
+
+    result = conn.execute(query).fetchall()
+
+    print(result)
 
 
 
 def main():
-    
-    pass
+
+    # Generate random set of bboxes
+    bboxes = generate_bbox_set()
+
+    # Intersect
+    for bbox in bboxes:
+        # 1. By country
+        bbox_codes = bbox_to_country_code(bbox)
+
+        # Retrieve & time
+        retrieve_from_s3(keys = bbox_codes,
+                         bbox = bbox)
+        # 2. By h3
 
 if __name__ == '__main__':
-    main()
+    #main()
+
+    bboxes = generate_bbox_set()[0]
+
+    bbox_codes = bbox_to_country_code(bboxes)
+    print(bbox_codes)
