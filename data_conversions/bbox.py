@@ -104,6 +104,7 @@ def generate_country_bboxes():
         json.dump(country_bboxes, fp)
 
 
+
 def bboxes_intersect(bbox1, bbox2):
 # Unpack coordinates for clarity
     x1_min, y1_min, x1_max, y1_max = bbox1
@@ -123,6 +124,9 @@ def bbox_to_country_code(bbox_query:list) -> list:
     
     :param bbox_query: List of coordinates [longmin, latmin, longmax, latmax]
     """
+
+    print(f'Gathering country-keys for {bbox_query}')
+
     codes = []
     for code, bbox in bboxes_country.items():
         latmin, longmin, latmax, longmax = bbox
@@ -130,9 +134,11 @@ def bbox_to_country_code(bbox_query:list) -> list:
         if bboxes_intersect(bbox_query, bbox):
             codes.append(code)
 
+    print(f'Found matching country-keys: {codes}')
+
     return codes
 
-def bbox_to_h3_code(bbox:list, resolution : int = 4) -> list:
+def bbox_to_h3_key(bbox:list, resolution : int = 4) -> list:
     """
     Returns list of h3-indices given a bounding box
     Queries at lower resolution to circumnavigate no-match issue
@@ -144,7 +150,7 @@ def bbox_to_h3_code(bbox:list, resolution : int = 4) -> list:
     """
 
     # Convert bbox to h3shape
-    print(f'Gathering h3 for {bbox}')
+    print(f'Gathering h3-keys for {bbox}')
 
     longmin, latmin, longmax, latmax = bbox
     h3_poly = LatLngPoly([
@@ -158,12 +164,15 @@ def bbox_to_h3_code(bbox:list, resolution : int = 4) -> list:
     h3_cells_res7 = h3.polygon_to_cells(h3_poly, res = 7)
 
     # Convert to target res
-    h3_cells = {
-        h3.cell_to_parent(cell, resolution)
+    h3_keys = list({
+        f'parquet-h3/h3_cell={parent}/{parent}.parquet'
         for cell in h3_cells_res7
-    }
+        for parent in [h3.cell_to_parent(cell, resolution)]
+    })
 
-    return list(h3_cells)
+    print(f'Found matching h3-keys: {h3_keys}')
+
+    return h3_keys
 
 def generate_bbox_set(num_cat: int = 3, boxes_per_cat: int = 10):
     """
@@ -197,23 +206,16 @@ def retrieve_from_s3(keys: list[str], bbox: list):
     long_min, lat_min, long_max, lat_max = bbox
 
     query = (f"""
-            COPY (
-            SELECT *
+            SELECT Count(*)
             FROM read_parquet([{sql_array}])
             WHERE ST_Intersects(
             geometry,
             ST_MakeEnvelope({long_min}, {lat_min},
                              {long_max}, {lat_max})
             )
-            ) TO 'buildings.parquet'
-            (FORMAT PARQUET);
             """)
-    
-    print(query)
 
     result = conn.execute(query).fetchall()
-
-    print(result)
 
 
 
@@ -228,7 +230,7 @@ def main():
         """
         # 1. By country
         bbox_codes = bbox_to_country_code(bbox)
-
+        
 
 
        
@@ -242,6 +244,12 @@ def main():
         
         """
         # 2. By h3
-        h3_codes = bbox_to_h3_code(bbox)
+        h3_keys = bbox_to_h3_key(bbox)
+        retrieve_from_s3(keys = h3_keys,
+                         bbox = bbox)
+
+
+
+
 if __name__ == '__main__':
     main()
