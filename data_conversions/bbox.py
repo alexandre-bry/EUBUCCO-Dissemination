@@ -1,6 +1,7 @@
 """
 Measuring query performance of h3 and country partitions
 """
+
 # External
 import boto3
 import pyarrow.parquet as pq
@@ -215,38 +216,69 @@ def retrieve_from_s3(keys: list[str], bbox: list):
             )
             """)
 
-    result = conn.execute(query).fetchall()
+    num_features = conn.execute(query).fetchall()
 
+    return num_features
 
+def write_results(result : list[dict], output_path : Path) -> None:
+    with open(output_path, "w", newline="") as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=result[0].keys()
+        )
+        writer.writeheader()
+        writer.writerows(result)
+
+    print(f"Saved benchmark results to {output_path}")
 
 def main():
+
+    # Save results
+    benchmark = []
 
     # Generate random set of bboxes
     bboxes = generate_bbox_set()
 
-    # Intersect
-    for bbox in bboxes:
+    for i, bbox in enumerate(bboxes):
 
-        """
         # 1. By country
-        bbox_codes = bbox_to_country_code(bbox)
+        country_keys = bbox_to_country_code(bbox)
         
-
-
-       
         # Retrieve & time
         start_time = time.time()
-        retrieve_from_s3(keys = bbox_codes,
-                         bbox = bbox)
+        country_num_features = retrieve_from_s3(keys = country_keys,
+                                                bbox = bbox)
         
-        end_time = time.time()
-        print(f'Query took {end_time - start_time} s.')
+        country_query_time = time.time() - start_time
+        print(f'Query took {country_query_time} s.')
         
-        """
+        
         # 2. By h3
         h3_keys = bbox_to_h3_key(bbox)
-        retrieve_from_s3(keys = h3_keys,
-                         bbox = bbox)
+
+        start_time = time.time()
+        h3_num_features = retrieve_from_s3(keys = h3_keys,
+                                           bbox = bbox)
+        h3_query_time = time.time() - start_time
+        print(f'Query took {h3_query_time} s to deliver.')
+
+        # Store results
+        benchmark.append({
+            "bbox_id" : i,
+            "longmin" : bbox[0],
+            "latmin" : bbox[1],
+            "longmax" : bbox[2],
+            "latmax" : bbox[3],
+            "country_time" : country_query_time,
+            "country_num_features" : country_num_features,
+            "country_num_files" : len(country_keys),
+            "h3_time" : h3_query_time,
+            "h3_num_features" : h3_num_features,
+            "h3_num_files" : len(h3_keys)
+        })
+
+    write_results(result = benchmark,
+                  output_path = Path('..', 'data', 'benchmark_result.csv'))
 
 
 
