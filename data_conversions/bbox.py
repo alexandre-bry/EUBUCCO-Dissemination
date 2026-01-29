@@ -35,7 +35,7 @@ client = boto3.client(
 )
 #--------------------------------------------------#
 # Load globally
-path_to_json = Path('..', 'data', 'bbox_countries.json')
+path_to_json = Path('bbox_countries.json')
 with open(path_to_json) as f:
     bboxes_country = json.load(f)
 #--------------------------------------------------#
