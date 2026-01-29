@@ -56,8 +56,8 @@ conn.execute(f"""
             """)
 #--------------------------------------------------#
 # For consistent randomness
-random.seed(42)
-np.random.seed(42)
+random.seed(420)
+np.random.seed(420)
 #--------------------------------------------------#
 
 # Necessary for setup of workflow
@@ -201,8 +201,8 @@ def filter_h3_keys(h3_keys):
 def generate_bbox_set(
     latmin_global = 46.19591, latmax_global = 52.26609,
     longmin_global = 6.13296, longmax_global = 21.06780,
-    lat_min_size=0.1, lat_max_size=1,
-    long_min_size=0.1, long_max_size=1,
+    lat_min_size=0.05, lat_max_size=0.8,
+    long_min_size=0.05, long_max_size=0.8,
     n_categories=10, n_per_category=3
 ):
     """
@@ -287,7 +287,7 @@ def main():
     # Generate random set of bboxes
     bboxes = generate_bbox_set()
 
-    for i, bbox in tqdm(enumerate(bboxes)):
+    for i, bbox in enumerate(bboxes):
 
         # 1. By country
         country_keys = bbox_to_country_code(bbox)
@@ -337,7 +337,7 @@ def main():
         })
 
     write_results(result = benchmark,
-                  output_path = Path('..', 'data', 'benchmark_result.csv'))
+                  output_path = 'benchmark_result.csv')
 
 
 
