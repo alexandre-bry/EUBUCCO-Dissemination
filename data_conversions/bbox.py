@@ -199,8 +199,8 @@ def filter_h3_keys(h3_keys):
     return existing_keys
     
 def generate_bbox_set(
-    latmin_global = 46.19591, latmax_global = 52.26609,
-    longmin_global = 6.13296, longmax_global = 21.06780,
+    latmin_global = 41.4659, latmax_global = 53.212,
+    longmin_global = 15.5542, longmax_global = 23.418,
     lat_min_size=0.05, lat_max_size=0.8,
     long_min_size=0.05, long_max_size=0.8,
     n_categories=10, n_per_category=3
