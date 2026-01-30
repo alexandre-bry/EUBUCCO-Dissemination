@@ -233,6 +233,7 @@ async function handleDownload() {
         statusMsg.innerText = "Checking the number of buildings...";
 
         const fileListSQL = validFileList.map((f) => `'${f}'`).join(", ");
+        console.log(fileListSQL);
 
         const outputFilename = `eubucco_custom.parquet`;
         const countResult = await conn.query(`
@@ -262,6 +263,11 @@ async function handleDownload() {
                 ST_MakeEnvelope(${nMinLon}::DOUBLE, ${nMinLat}::DOUBLE, ${nMaxLon}::DOUBLE, ${nMaxLat}::DOUBLE)
             )
         `;
+        console.log(`SELECT * FROM read_parquet([${fileListSQL}])
+            WHERE ST_Intersects(
+                geometry, 
+                ST_MakeEnvelope(${nMinLon}::DOUBLE, ${nMinLat}::DOUBLE, ${nMaxLon}::DOUBLE, ${nMaxLat}::DOUBLE)
+            )   `);
 
         statusMsg.innerText =
             "Extracting buildings (this may take a minute)...";
